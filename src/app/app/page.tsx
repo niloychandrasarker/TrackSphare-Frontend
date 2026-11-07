@@ -821,6 +821,26 @@ export default function MobileAppPage() {
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+                  <div>
+                    <label className="text-[11px] text-gray-300 font-semibold block mb-1">
+                      Device Identifier / Traccar ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={deviceId}
+                      onChange={e => {
+                        const val = e.target.value.trim();
+                        setDeviceId(val);
+                        deviceIdRef.current = val;
+                        localStorage.setItem('tracksphere_device_uuid', val);
+                      }}
+                      placeholder="e.g. 377204 or Realme c71"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white text-xs font-mono focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      💡 If using Traccar Client APK, enter your Traccar identifier (e.g. <strong className="text-indigo-400">377204</strong>) here to link your photo &amp; name.
+                    </p>
+                  </div>
                   <button
                     onClick={handleRegisterDevice}
                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-1"

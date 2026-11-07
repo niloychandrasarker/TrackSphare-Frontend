@@ -22,6 +22,8 @@ export interface Device {
   battery_level:   number | null;
   network_status:  string | null;
   status:          'active' | 'revoked';
+  image_url?:      string | null;
+  user_name?:      string | null;
   last_seen_at:    Date | null;
   created_at:      Date;
   updated_at:      Date;
