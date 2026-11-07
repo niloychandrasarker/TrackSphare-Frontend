@@ -163,7 +163,7 @@ function LeafletMapComponent({
       const marker = L.marker(pos, { icon: customIcon }).addTo(markersLayer);
 
       const popupContent = `
-        <div style="color: #0f172a; font-family: sans-serif; padding: 4px; min-width: 190px;">
+        <div style="color: #0f172a; font-family: sans-serif; padding: 4px; min-width: 195px;">
           ${d.image_url ? `<img src="${d.image_url}" style="width: 100%; height: 95px; border-radius: 10px; object-fit: cover; margin-bottom: 8px; border: 1px solid #e2e8f0;" />` : ''}
           <div style="font-weight: 700; font-size: 14px; margin-bottom: 2px;">${d.device_name}</div>
           <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">User: <strong>${d.user_name}</strong></div>
@@ -172,6 +172,9 @@ function LeafletMapComponent({
           <div style="margin-top: 6px; font-size: 10px; font-weight: 600; color: ${stale ? '#d97706' : '#059669'};">
             ${stale ? '⚠️ Stale Fix' : '🟢 Real GPS (Live)'} • ${new Date(d.recorded_at).toLocaleTimeString()}
           </div>
+          <a href="/locations?deviceId=${d.device_id}" style="display: flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none; margin-top: 8px; padding: 6px 10px; background: #4f46e5; color: #ffffff; border-radius: 8px; font-size: 11px; font-weight: 700;">
+            ⏱️ Location History (কখন কোথায় ছিল)
+          </a>
         </div>
       `;
 
@@ -563,24 +566,26 @@ export default function TrackingPage() {
                 const isSelected = selected?.device_id === d.device_id;
 
                 return (
-                  <button
+                  <div
                     key={d.device_id}
                     onClick={() => handleSelectDevice(d)}
+                    role="button"
+                    tabIndex={0}
                     className={clsx(
-                      'w-full text-left p-3 rounded-xl transition-all cursor-pointer border',
+                      'w-full text-left p-3.5 rounded-2xl transition-all cursor-pointer border',
                       isSelected
-                        ? 'bg-indigo-950/80 border-indigo-600 text-white shadow-md'
+                        ? 'bg-indigo-950/80 border-indigo-500 text-white shadow-lg shadow-indigo-950/50'
                         : 'bg-gray-850 hover:bg-gray-800 border-gray-800/80 text-gray-300'
                     )}
                   >
                     <div className="flex items-center gap-3">
                       {d.image_url ? (
                         <div className="relative shrink-0">
-                          <img src={d.image_url} alt="" className="w-10 h-10 rounded-xl object-cover border border-gray-700 shadow-sm" />
-                          <span className={clsx('absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-gray-900', stale ? 'bg-amber-400' : 'bg-emerald-400')} />
+                          <img src={d.image_url} alt="" className="w-11 h-11 rounded-xl object-cover border border-gray-700 shadow-sm" />
+                          <span className={clsx('absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-gray-900', stale ? 'bg-amber-400' : 'bg-emerald-400')} />
                         </div>
                       ) : (
-                        <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center shrink-0 border border-gray-700">
+                        <div className="w-11 h-11 rounded-xl bg-gray-800 flex items-center justify-center shrink-0 border border-gray-700">
                           <Smartphone className="w-5 h-5 text-indigo-400" />
                         </div>
                       )}
@@ -588,19 +593,33 @@ export default function TrackingPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="text-sm font-bold truncate text-white">{d.device_name}</span>
-                          <span className={clsx('text-[10px] font-mono px-1.5 py-0.5 rounded-full', stale ? 'bg-amber-950 text-amber-400' : 'bg-emerald-950 text-emerald-400')}>
+                          <span className={clsx('text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold', stale ? 'bg-amber-950 text-amber-400 border border-amber-800/50' : 'bg-emerald-950 text-emerald-400 border border-emerald-800/50')}>
                             {stale ? 'Stale' : 'Live'}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 truncate">User: {d.user_name}</p>
+                        <p className="text-xs text-gray-400 truncate">User: <strong className="text-gray-300">{d.user_name}</strong></p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono mt-2 pt-2 border-t border-gray-800">
-                      <span>{Number(d.latitude).toFixed(4)}, {Number(d.longitude).toFixed(4)}</span>
+                    <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono mt-2.5 pt-2 border-t border-gray-800/80">
+                      <span>📍 {Number(d.latitude).toFixed(4)}, {Number(d.longitude).toFixed(4)}</span>
                       <span>{new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                     </div>
-                  </button>
+
+                    {/* ⏱️ LOCATION HISTORY BUTTON (কখন কোথায় ছিল) */}
+                    <div className="mt-2.5 pt-2 border-t border-gray-800/60 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-gray-500 font-medium">Day Journey</span>
+                      <a
+                        href={`/locations?deviceId=${d.device_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                        title="View where this user was throughout the day"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        Location History (কখন কোথায় ছিল)
+                      </a>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -717,6 +736,17 @@ export default function TrackingPage() {
                   <span>Active Live Fix: Coordinates streaming live</span>
                 </div>
               )}
+
+              {/* ⏱️ Direct Button to Location History (কখন কোথায় ছিল) */}
+              <div className="mt-3 pt-3 border-t border-gray-700/60">
+                <a
+                  href={`/locations?deviceId=${selected.device_id}`}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer"
+                >
+                  <Clock className="w-4 h-4" />
+                  View Day Location History (কখন কোথায় ছিল)
+                </a>
+              </div>
             </div>
           )}
         </div>

@@ -130,12 +130,18 @@ export default function LocationHistoryPage() {
   useEffect(() => {
     applyPreset('today');
 
+    // Check if a deviceId was passed via URL query (e.g. /locations?deviceId=...)
+    const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlDevId = sp?.get('deviceId');
+
     fetch('/api/v1/devices', { headers: { Authorization: `Bearer ${getToken()}` } })
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.data)) {
           setDevices(d.data);
-          if (d.data.length > 0) {
+          if (urlDevId && d.data.some((x: any) => x.id === urlDevId)) {
+            setSelectedDeviceId(urlDevId);
+          } else if (d.data.length > 0) {
             setSelectedDeviceId(d.data[0].id);
           }
         }
