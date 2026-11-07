@@ -82,7 +82,7 @@ async function handleLocationUpload(req: NextRequest, isGet = false) {
 
       await query(
         `INSERT INTO devices (id, user_id, name, model, user_name, image_url, status, sharing_enabled, last_seen_at, battery_level)
-         VALUES ($1, $2, $3, 'Android GPS Client', $4, $5, 'active', TRUE, NOW(), $6)
+         VALUES ($1, $2, $3, $7, $4, $5, 'active', TRUE, NOW(), $6)
          ON CONFLICT (id) DO UPDATE SET 
             status = 'active', 
             sharing_enabled = TRUE, 
@@ -90,8 +90,9 @@ async function handleLocationUpload(req: NextRequest, isGet = false) {
             battery_level = COALESCE($6, devices.battery_level),
             name = COALESCE($3, devices.name),
             user_name = COALESCE($4, devices.user_name),
-            image_url = COALESCE($5, devices.image_url)`,
-        [deviceId, targetUserId, devName, uName, imgUrl, batteryLevel]
+            image_url = COALESCE($5, devices.image_url),
+            model = COALESCE($7, devices.model)`,
+        [deviceId, targetUserId, devName, uName, imgUrl, batteryLevel, String(rawDevId)]
       );
     } else {
       deviceId = dev.rows[0].id;

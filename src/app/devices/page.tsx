@@ -425,16 +425,6 @@ export default function DevicesPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {/* 🛰️ Live Location Track Button */}
-                <a
-                  href="/tracking"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/70 border border-emerald-800 hover:bg-emerald-800 text-emerald-300 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  title="View Real-Time Live Location on Map"
-                >
-                  <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                  Live Track
-                </a>
-
                 {/* ⏱️ Location History Button */}
                 <a
                   href={`/locations?deviceId=${d.id}`}

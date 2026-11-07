@@ -79,6 +79,50 @@ export default function LocationHistoryPage() {
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const resolvedKeysRef = useRef<Set<string>>(new Set());
 
+  // Custom Place Naming State
+  const [namingPoint, setNamingPoint] = useState<LocationRecord | null>(null);
+  const [customPlaceInput, setCustomPlaceInput] = useState('');
+  const [savingPlace, setSavingPlace] = useState(false);
+
+  function openNamePlaceModal(p: LocationRecord) {
+    setNamingPoint(p);
+    const existing = getPlaceName(Number(p.latitude), Number(p.longitude));
+    setCustomPlaceInput(existing.startsWith('Location (') ? '' : existing);
+  }
+
+  async function handleSaveCustomPlace() {
+    if (!namingPoint || !customPlaceInput.trim()) return;
+    setSavingPlace(true);
+    try {
+      const res = await fetch('/api/v1/locations/geocode', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: customPlaceInput.trim(),
+          latitude: Number(namingPoint.latitude),
+          longitude: Number(namingPoint.longitude),
+          radiusMeters: 800,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const key = `${Number(namingPoint.latitude).toFixed(4)},${Number(namingPoint.longitude).toFixed(4)}`;
+        resolvedKeysRef.current.add(key);
+        setPlaceNames(prev => ({ ...prev, [key]: customPlaceInput.trim() }));
+        setNamingPoint(null);
+      } else {
+        alert(data.error || 'Failed to save place name');
+      }
+    } catch (e: any) {
+      alert('Error saving place: ' + e.message);
+    } finally {
+      setSavingPlace(false);
+    }
+  }
+
   // Map state
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -983,9 +1027,22 @@ export default function LocationHistoryPage() {
                       </div>
 
                       {/* Resolved Place Name */}
-                      <p className="text-xs font-semibold text-gray-200 line-clamp-2 my-1">
-                        📍 {place}
-                      </p>
+                      <div className="my-1">
+                        <p className="text-xs font-semibold text-gray-200 line-clamp-2">
+                          📍 {place}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openNamePlaceModal(p);
+                          }}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 mt-0.5 cursor-pointer no-print"
+                          title="Name or edit custom landmark for this place"
+                        >
+                          🏷️ Set Exact Place Name
+                        </button>
+                      </div>
 
                       <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono">
                         <span>Lat: {Number(p.latitude).toFixed(4)}</span>
@@ -1145,9 +1202,22 @@ export default function LocationHistoryPage() {
                           <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm font-medium text-gray-100">{place}</p>
-                            <p className="text-[11px] text-gray-400 font-mono mt-0.5">
-                              {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
-                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[11px] text-gray-400 font-mono">
+                                {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openNamePlaceModal(p);
+                                }}
+                                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer no-print inline-flex items-center gap-1"
+                                title="Name or edit exact place name"
+                              >
+                                🏷️ Edit Name
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1276,6 +1346,50 @@ export default function LocationHistoryPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── NAME / EDIT PLACE MODAL ─── */}
+      {namingPoint && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm no-print">
+          <div className="bg-gray-900 border border-gray-700 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <h2 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+              🏷️ Set Exact Place Name
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">
+              Enter the exact bazar, village, or landmark name for coordinates{' '}
+              <span className="font-mono text-indigo-300">
+                {Number(namingPoint.latitude).toFixed(5)}, {Number(namingPoint.longitude).toFixed(5)}
+              </span>.
+            </p>
+
+            <input
+              type="text"
+              value={customPlaceInput}
+              onChange={e => setCustomPlaceInput(e.target.value)}
+              placeholder="e.g. বন্ডনাল বাজার, কেন্দুয়া উপজেলা (Bandonal Bazar, Kendua)"
+              className="w-full px-3.5 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+              autoFocus
+            />
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setNamingPoint(null)}
+                className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-sm cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomPlace}
+                disabled={savingPlace || !customPlaceInput.trim()}
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/30 cursor-pointer transition-all"
+              >
+                {savingPlace ? 'Saving...' : 'Save Place Name'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
