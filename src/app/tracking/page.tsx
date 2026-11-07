@@ -370,40 +370,6 @@ export default function TrackingPage() {
   useEffect(() => {
     fetchLocations();
     const interval = setInterval(fetchLocations, 10_000);
-
-    // Try auto-detecting real location if user allows
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const accuracy = pos.coords.accuracy;
-
-          const devId = '9f2f6062-af23-48fa-abc3-cb2c42f9ec96';
-          const token = localStorage.getItem('adminToken') || localStorage.getItem('accessToken') || '';
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-          if (token) headers['Authorization'] = `Bearer ${token}`;
-
-          try {
-            await fetch('/api/v1/locations', {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                deviceId: devId,
-                latitude: lat,
-                longitude: lng,
-                accuracy: Math.round(accuracy * 10) / 10,
-                recordedAt: new Date().toISOString(),
-              }),
-            });
-            fetchLocations();
-          } catch {}
-        },
-        () => {}, // silent fallback if not permitted
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-    }
-
     return () => clearInterval(interval);
   }, []);
 
