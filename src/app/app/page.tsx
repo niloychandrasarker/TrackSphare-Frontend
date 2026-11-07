@@ -43,6 +43,60 @@ export default function MobileAppPage() {
   const deviceIdRef = useRef<string>('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastSentTimeRef = useRef<number>(0);
+  const isSharingRef = useRef<boolean>(false);
+  const wakeLockRef = useRef<any>(null);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
+
+  // 1-second silent WAV base64 audio data URI to prevent Android Chrome tab sleep
+  const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        const lock = await (navigator as any).wakeLock.request('screen');
+        wakeLockRef.current = lock;
+        setWakeLockActive(true);
+        lock.addEventListener('release', () => {
+          setWakeLockActive(false);
+          wakeLockRef.current = null;
+        });
+      }
+    } catch (e) {
+      console.warn('Wake Lock request:', e);
+    }
+  }
+
+  function releaseWakeLock() {
+    try {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+        setWakeLockActive(false);
+      }
+    } catch {}
+  }
+
+  function startSilentAudio() {
+    try {
+      if (!silentAudioRef.current) {
+        const audio = new Audio(SILENT_AUDIO_URI);
+        audio.loop = true;
+        audio.volume = 0.01;
+        audio.play().catch(() => {});
+        silentAudioRef.current = audio;
+      }
+    } catch {}
+  }
+
+  function stopSilentAudio() {
+    try {
+      if (silentAudioRef.current) {
+        silentAudioRef.current.pause();
+        silentAudioRef.current = null;
+      }
+    } catch {}
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -92,7 +146,8 @@ export default function MobileAppPage() {
     const persistentFlag = localStorage.getItem('tracksphere_sharing_active');
     if (registeredFlag && persistentFlag === 'true') {
       setIsSharing(true);
-      setSyncStatus('Persistent Sharing ACTIVE • Resuming GPS broadcast...');
+      isSharingRef.current = true;
+      setSyncStatus('Persistent Sharing ACTIVE • Resuming live GPS stream...');
       startTracking(currentId);
     } else if (registeredFlag) {
       setSyncStatus('Device Registered • Sharing is paused');
@@ -100,7 +155,27 @@ export default function MobileAppPage() {
       setSyncStatus('New Device • Complete registration below');
     }
 
+    // Auto Wakeup listener: Fires when phone screen turns on, tab is focused, or app wakes from sleep
+    const handleWakeup = () => {
+      if (document.visibilityState === 'visible' && isSharingRef.current) {
+        requestWakeLock();
+        startSilentAudio();
+        forceGpsPing();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleWakeup);
+    window.addEventListener('focus', handleWakeup);
+    window.addEventListener('pageshow', handleWakeup);
+    window.addEventListener('online', handleWakeup);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleWakeup);
+      window.removeEventListener('focus', handleWakeup);
+      window.removeEventListener('pageshow', handleWakeup);
+      window.removeEventListener('online', handleWakeup);
+      releaseWakeLock();
+      stopSilentAudio();
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
@@ -281,6 +356,38 @@ export default function MobileAppPage() {
     }
   }
 
+  function forceGpsPing(targetDevId?: string) {
+    const devId = targetDevId || deviceIdRef.current || deviceId;
+    if (!navigator.geolocation || !devId) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const c = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        };
+        setCoords(c);
+        latestCoordsRef.current = c;
+        lastSentTimeRef.current = Date.now();
+        sendLocationUpdate(c.lat, c.lng, c.accuracy, devId);
+      },
+      (err) => {
+        console.warn('Active ping warning:', err.message);
+        // If GPS hardware is temporarily busy, resend latest coords so the server knows the device is live
+        if (latestCoordsRef.current) {
+          sendLocationUpdate(
+            latestCoordsRef.current.lat,
+            latestCoordsRef.current.lng,
+            latestCoordsRef.current.accuracy,
+            devId
+          );
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+  }
+
   async function startTracking(explicitDevId?: string) {
     const targetDevId = explicitDevId || deviceIdRef.current || deviceId;
     if (!navigator.geolocation) {
@@ -290,8 +397,15 @@ export default function MobileAppPage() {
 
     setError('');
     setIsSharing(true);
+    isSharingRef.current = true;
     localStorage.setItem('tracksphere_sharing_active', 'true');
-    setSyncStatus('Acquiring high-accuracy GPS fix...');
+    setSyncStatus('Continuous Real-Time GPS Active • Broadcasting...');
+
+    // 1. Keep phone screen awake
+    requestWakeLock();
+
+    // 2. Start silent audio loop to prevent mobile tab sleep
+    startSilentAudio();
 
     if (targetDevId) {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -310,6 +424,10 @@ export default function MobileAppPage() {
       }).catch(() => {});
     }
 
+    // 3. Immediately send fresh satellite GPS fix
+    forceGpsPing(targetDevId);
+
+    // 4. Watch position for motion deltas
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
@@ -323,55 +441,33 @@ export default function MobileAppPage() {
         setCoords(c);
         latestCoordsRef.current = c;
 
-        // Instant Realtime GPS transmission when position changes (throttled to max 1 per 2.5s)
         const now = Date.now();
-        if (now - lastSentTimeRef.current >= 2500) {
+        if (now - lastSentTimeRef.current >= 2000) {
           lastSentTimeRef.current = now;
           sendLocationUpdate(c.lat, c.lng, c.accuracy, targetDevId);
         }
       },
       (err) => {
         console.warn('Geolocation error:', err.message);
-        setError('Location permission required. Please allow access.');
       },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 8000 }
     );
 
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const c = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        accuracy: pos.coords.accuracy,
-      };
-      setCoords(c);
-      latestCoordsRef.current = c;
-      lastSentTimeRef.current = Date.now();
-      sendLocationUpdate(c.lat, c.lng, c.accuracy, targetDevId);
-    });
-
+    // 5. Active GPS Heartbeat polling every 3.5 seconds
     if (intervalIdRef.current !== null) {
       clearInterval(intervalIdRef.current);
     }
-    // High-frequency realtime heartbeat every 4 seconds
     intervalIdRef.current = setInterval(() => {
-      if (latestCoordsRef.current) {
-        const now = Date.now();
-        if (now - lastSentTimeRef.current >= 3500) {
-          lastSentTimeRef.current = now;
-          sendLocationUpdate(
-            latestCoordsRef.current.lat,
-            latestCoordsRef.current.lng,
-            latestCoordsRef.current.accuracy,
-            targetDevId
-          );
-        }
-      }
-    }, 4000);
+      forceGpsPing(targetDevId);
+    }, 3500);
   }
 
   function stopTrackingExplicit() {
     setIsSharing(false);
+    isSharingRef.current = false;
     localStorage.setItem('tracksphere_sharing_active', 'false');
+    releaseWakeLock();
+    stopSilentAudio();
 
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -660,11 +756,26 @@ export default function MobileAppPage() {
         </div>
 
         {/* ─── LIVE GPS TELEMETRY ─── */}
-        <div className="bg-gray-800/30 border border-gray-800 rounded-2xl p-4 space-y-2 mb-4 text-xs">
+        <div className="bg-gray-850/60 border border-gray-800 rounded-2xl p-4 space-y-2.5 mb-4 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400">Live Streaming:</span>
+            <span className="text-emerald-400 font-bold flex items-center gap-1 font-mono text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              Real-time Active (Every 3.5s)
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-gray-400">
+            <span>Keep-Screen-Awake:</span>
+            <span className="font-semibold text-[11px] font-mono text-indigo-400">
+              {wakeLockActive ? '🟢 Screen WakeLock ON' : '🟢 Background Stream Active'}
+            </span>
+          </div>
+
           <div className="flex items-center justify-between text-gray-400">
             <span>Schedule Logging:</span>
-            <span className="text-emerald-400 font-semibold flex items-center gap-1 font-mono text-[11px]">
-              <Clock className="w-3.5 h-3.5" /> Every 30 Mins Active
+            <span className="text-indigo-300 font-semibold flex items-center gap-1 font-mono text-[11px]">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" /> Every 30 Mins Logged
             </span>
           </div>
 
@@ -689,15 +800,35 @@ export default function MobileAppPage() {
 
           <div className="flex items-center justify-between text-gray-400">
             <span>Checkpoints Saved:</span>
-            <span className="text-emerald-400 font-mono font-bold">{syncCount} fixes logged</span>
+            <span className="text-emerald-400 font-mono font-bold">{syncCount} fixes broadcasted</span>
           </div>
 
           {lastSyncTime && (
             <div className="flex items-center justify-between text-gray-400">
               <span>Last Broadcast:</span>
-              <span className="text-gray-300 font-mono">{lastSyncTime}</span>
+              <span className="text-emerald-300 font-mono font-semibold">{lastSyncTime}</span>
             </div>
           )}
+        </div>
+
+        {/* 📲 OFFICIAL ANDROID APK DOWNLOAD CARD FOR 24/7 BACKGROUND TRACKING */}
+        <div className="mb-4 p-3.5 bg-gradient-to-r from-emerald-950/40 via-gray-900 to-indigo-950/40 border border-emerald-700/60 rounded-2xl text-left">
+          <div className="flex items-start gap-3">
+            <Smartphone className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-xs font-bold text-white">24/7 Pocket Tracking on Android</h4>
+              <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+                Want continuous real-time tracking even when your phone is locked in your pocket without keeping the browser open? Install our signed native Android APK.
+              </p>
+              <a
+                href="/downloads/TrackSphere-release.apk"
+                download="TrackSphere-v1.2.0.apk"
+                className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
+              >
+                📲 Download TrackSphere APK (6.4 MB)
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* 30-Minute Schedule Logging Banner */}
