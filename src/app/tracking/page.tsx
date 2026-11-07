@@ -24,7 +24,18 @@ interface LiveDevice {
 }
 
 function isStale(recordedAt: string): boolean {
-  return Date.now() - new Date(recordedAt).getTime() > 2 * 60 * 1000;
+  if (!recordedAt) return true;
+  return Date.now() - new Date(recordedAt).getTime() > 5 * 60 * 1000;
+}
+
+function getTimeAgo(dateStr: string): string {
+  if (!dateStr) return 'unknown';
+  const diffSec = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  return `${diffHours} hr ago`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -728,12 +739,12 @@ export default function TrackingPage() {
               {isStale(selected.recorded_at) ? (
                 <div className="mt-3 p-2 bg-amber-950/60 border border-amber-800/80 rounded-xl text-amber-300 text-xs flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <span>Stale Telemetry: Last update was more than 10 minutes ago</span>
+                  <span>Stale Telemetry: Last update was {getTimeAgo(selected.recorded_at)}</span>
                 </div>
               ) : (
                 <div className="mt-3 p-2 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Active Live Fix: Coordinates streaming live</span>
+                  <span>Active Live Fix: Coordinates streaming live ({getTimeAgo(selected.recorded_at)})</span>
                 </div>
               )}
 
