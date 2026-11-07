@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import {
   RefreshCw, MapPin, Battery, Wifi, Clock, Radio, Navigation,
   ShieldCheck, Layers, Crosshair, AlertCircle, CheckCircle2, Globe,
-  Smartphone, User
+  Smartphone, User, ChevronDown, ChevronUp, X, Minus
 } from 'lucide-react';
 import { Wrapper, Status } from '@googlemaps/react-wrapper';
 import { clsx } from 'clsx';
@@ -45,10 +45,14 @@ function LeafletMapComponent({
   devices,
   selected,
   onSelect,
+  popupDeviceId,
+  onPopupChange,
 }: {
   devices: LiveDevice[];
   selected: LiveDevice | null;
   onSelect: (d: LiveDevice) => void;
+  popupDeviceId: string | null;
+  onPopupChange: (id: string | null) => void;
 }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -56,6 +60,11 @@ function LeafletMapComponent({
   const [mapType, setMapType] = useState<'google_streets' | 'google_hybrid' | 'osm'>('google_streets');
   const tileLayerRef = useRef<any>(null);
   const lastFlyIdRef = useRef<string | null>(null);
+  const onPopupChangeRef = useRef(onPopupChange);
+
+  useEffect(() => {
+    onPopupChangeRef.current = onPopupChange;
+  }, [onPopupChange]);
 
   function getTileConfig(type: 'google_streets' | 'google_hybrid' | 'osm'): { url: string; options: any } {
     if (type === 'google_streets') {
@@ -98,6 +107,10 @@ function LeafletMapComponent({
 
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
+
+    map.on('popupclose', () => {
+      onPopupChangeRef.current?.(null);
+    });
 
     return () => {
       map.remove();
@@ -193,9 +206,10 @@ function LeafletMapComponent({
       marker.on('click', () => {
         lastFlyIdRef.current = d.device_id;
         onSelect(d);
+        onPopupChange(d.device_id);
       });
 
-      if (isSelected) {
+      if (popupDeviceId === d.device_id) {
         marker.openPopup();
       }
     });
@@ -214,7 +228,7 @@ function LeafletMapComponent({
     } else if (devices.length > 1 && !lastFlyIdRef.current) {
       map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [devices, selected]);
+  }, [devices, selected, popupDeviceId]);
 
   return (
     <div className="relative w-full h-full min-h-[550px] rounded-2xl overflow-hidden">
@@ -327,6 +341,8 @@ export default function TrackingPage() {
   const [devices, setDevices] = useState<LiveDevice[]>([]);
   const [selected, setSelected] = useState<LiveDevice | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const [popupDeviceId, setPopupDeviceId] = useState<string | null>(null);
+  const [isCardMinimized, setIsCardMinimized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -653,6 +669,8 @@ export default function TrackingPage() {
                 devices={devices}
                 selected={selected}
                 onSelect={handleSelectDevice}
+                popupDeviceId={popupDeviceId}
+                onPopupChange={setPopupDeviceId}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-950">
@@ -679,85 +697,180 @@ export default function TrackingPage() {
 
           {/* Floating Selected Device Overlay Card */}
           {selected && (
-            <div className="absolute bottom-5 left-5 right-5 sm:left-auto sm:right-5 sm:w-96 bg-gray-900/95 backdrop-blur-md border border-gray-700/80 rounded-2xl p-5 shadow-2xl z-[600]">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  {selected.image_url ? (
-                    <img src={selected.image_url} alt="" className="w-12 h-12 rounded-2xl object-cover border-2 border-indigo-500 shadow-md shrink-0" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center shrink-0 border border-gray-700">
-                      <Smartphone className="w-6 h-6 text-indigo-400" />
+            <div className={clsx(
+              "absolute bottom-5 left-5 right-5 sm:left-auto sm:right-5 bg-gray-900/95 backdrop-blur-md border border-gray-700/80 rounded-2xl shadow-2xl z-[600] transition-all duration-200",
+              isCardMinimized ? "sm:w-auto p-3" : "sm:w-96 p-5"
+            )}>
+              {isCardMinimized ? (
+                /* ─── MINIMIZED VIEW (COMPACT BOTTOM DOCK) ─── */
+                <div className="flex items-center justify-between gap-3">
+                  <div
+                    className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setIsCardMinimized(false)}
+                    title="Click to expand details"
+                  >
+                    {selected.image_url ? (
+                      <img src={selected.image_url} alt="" className="w-8 h-8 rounded-xl object-cover border border-indigo-500 shadow-sm shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center shrink-0 border border-gray-700">
+                        <Smartphone className="w-4 h-4 text-indigo-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={clsx('w-2 h-2 rounded-full shrink-0', isStale(selected.recorded_at) ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse')} />
+                        <span className="font-bold text-white text-xs truncate max-w-[130px] sm:max-w-[180px]">{selected.device_name}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-mono truncate">
+                        {Number(selected.latitude).toFixed(4)}, {Number(selected.longitude).toFixed(4)} • {getTimeAgo(selected.recorded_at)}
+                      </p>
                     </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <h3 className="font-bold text-white text-base">{selected.device_name}</h3>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">User: {selected.user_name}</p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setPopupDeviceId(prev => prev === selected.device_id ? null : selected.device_id)}
+                      className={clsx(
+                        "p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1",
+                        popupDeviceId === selected.device_id ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-300 hover:text-white"
+                      )}
+                      title={popupDeviceId === selected.device_id ? "Hide Map Pin Popup" : "Show Map Pin Popup"}
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                    </button>
+                    <a
+                      href={`/locations?deviceId=${selected.device_id}`}
+                      className="p-1.5 bg-indigo-950 hover:bg-indigo-900 border border-indigo-800/80 text-indigo-300 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1"
+                      title="Location History"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      onClick={() => setIsCardMinimized(false)}
+                      className="p-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-xs transition-colors flex items-center gap-1 font-semibold cursor-pointer"
+                      title="Expand Card"
+                    >
+                      <ChevronUp className="w-4 h-4 text-indigo-400" />
+                      <span className="text-[11px] hidden sm:inline">Expand</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        selectedIdRef.current = null;
+                        setSelected(null);
+                        setPopupDeviceId(null);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg text-xs transition-colors cursor-pointer"
+                      title="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    selectedIdRef.current = null;
-                    setSelected(null);
-                  }}
-                  className="text-gray-400 hover:text-white text-xl leading-none px-2 py-1 cursor-pointer"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2.5 text-xs text-gray-300">
-                <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
-                  <span className="text-[10px] text-gray-500 uppercase block font-semibold">GPS Coordinates</span>
-                  <span className="font-mono text-indigo-300">
-                    {Number(selected.latitude).toFixed(5)}, {Number(selected.longitude).toFixed(5)}
-                  </span>
-                </div>
-                <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
-                  <span className="text-[10px] text-gray-500 uppercase block font-semibold">Accuracy</span>
-                  <span className="font-mono text-emerald-300">
-                    ±{selected.accuracy ? Math.round(Number(selected.accuracy)) + ' meters' : 'Standard'}
-                  </span>
-                </div>
-                <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
-                  <span className="text-[10px] text-gray-500 uppercase block font-semibold">Battery</span>
-                  <span className="font-mono text-gray-200 flex items-center gap-1">
-                    <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                    {selected.battery_level != null ? `${selected.battery_level}%` : 'Unknown'}
-                  </span>
-                </div>
-                <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
-                  <span className="text-[10px] text-gray-500 uppercase block font-semibold">Last Ping</span>
-                  <span className="font-mono text-gray-200">
-                    {new Date(selected.recorded_at).toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
-
-              {isStale(selected.recorded_at) ? (
-                <div className="mt-3 p-2 bg-amber-950/60 border border-amber-800/80 rounded-xl text-amber-300 text-xs flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <span>Stale Telemetry: Last update was {getTimeAgo(selected.recorded_at)}</span>
-                </div>
               ) : (
-                <div className="mt-3 p-2 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Active Live Fix: Coordinates streaming live ({getTimeAgo(selected.recorded_at)})</span>
+                /* ─── EXPANDED VIEW ─── */
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {selected.image_url ? (
+                        <img src={selected.image_url} alt="" className="w-12 h-12 rounded-2xl object-cover border-2 border-indigo-500 shadow-md shrink-0" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center shrink-0 border border-gray-700">
+                          <Smartphone className="w-6 h-6 text-indigo-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={clsx("w-2.5 h-2.5 rounded-full shrink-0", isStale(selected.recorded_at) ? "bg-amber-400" : "bg-emerald-400 animate-pulse")} />
+                          <h3 className="font-bold text-white text-base truncate">{selected.device_name}</h3>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">User: {selected.user_name}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setPopupDeviceId(prev => prev === selected.device_id ? null : selected.device_id)}
+                        className={clsx(
+                          "p-1.5 rounded-xl text-xs transition-colors cursor-pointer",
+                          popupDeviceId === selected.device_id ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                        )}
+                        title={popupDeviceId === selected.device_id ? "Hide Map Pin Popup" : "Show Map Pin Popup"}
+                      >
+                        <MapPin className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setIsCardMinimized(true)}
+                        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
+                        title="Minimize Card"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          selectedIdRef.current = null;
+                          setSelected(null);
+                          setPopupDeviceId(null);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
+                        title="Close"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2.5 text-xs text-gray-300">
+                    <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
+                      <span className="text-[10px] text-gray-500 uppercase block font-semibold">GPS Coordinates</span>
+                      <span className="font-mono text-indigo-300">
+                        {Number(selected.latitude).toFixed(5)}, {Number(selected.longitude).toFixed(5)}
+                      </span>
+                    </div>
+                    <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
+                      <span className="text-[10px] text-gray-500 uppercase block font-semibold">Accuracy</span>
+                      <span className="font-mono text-emerald-300">
+                        ±{selected.accuracy ? Math.round(Number(selected.accuracy)) + ' meters' : 'Standard'}
+                      </span>
+                    </div>
+                    <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
+                      <span className="text-[10px] text-gray-500 uppercase block font-semibold">Battery</span>
+                      <span className="font-mono text-gray-200 flex items-center gap-1">
+                        <Battery className="w-3.5 h-3.5 text-emerald-400" />
+                        {selected.battery_level != null ? `${selected.battery_level}%` : 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="p-2 bg-gray-800/70 rounded-xl border border-gray-700/50">
+                      <span className="text-[10px] text-gray-500 uppercase block font-semibold">Last Ping</span>
+                      <span className="font-mono text-gray-200">
+                        {new Date(selected.recorded_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isStale(selected.recorded_at) ? (
+                    <div className="mt-3 p-2 bg-amber-950/60 border border-amber-800/80 rounded-xl text-amber-300 text-xs flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>Stale Telemetry: Last update was {getTimeAgo(selected.recorded_at)}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-3 p-2 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Active Live Fix: Coordinates streaming live ({getTimeAgo(selected.recorded_at)})</span>
+                    </div>
+                  )}
+
+                  {/* ⏱️ Direct Button to Location History */}
+                  <div className="mt-3 pt-3 border-t border-gray-700/60">
+                    <a
+                      href={`/locations?deviceId=${selected.device_id}`}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer"
+                    >
+                      <Clock className="w-4 h-4" />
+                      Location History
+                    </a>
+                  </div>
                 </div>
               )}
-
-              {/* ⏱️ Direct Button to Location History */}
-              <div className="mt-3 pt-3 border-t border-gray-700/60">
-                <a
-                  href={`/locations?deviceId=${selected.device_id}`}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer"
-                >
-                  <Clock className="w-4 h-4" />
-                  Location History
-                </a>
-              </div>
             </div>
           )}
         </div>
