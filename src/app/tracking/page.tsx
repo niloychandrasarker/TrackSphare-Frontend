@@ -42,8 +42,28 @@ function LeafletMapComponent({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
-  const [mapType, setMapType] = useState<'streets' | 'satellite'>('streets');
+  const [mapType, setMapType] = useState<'google_streets' | 'google_hybrid' | 'osm'>('google_streets');
   const tileLayerRef = useRef<any>(null);
+  const lastFlyIdRef = useRef<string | null>(null);
+
+  function getTileConfig(type: 'google_streets' | 'google_hybrid' | 'osm'): { url: string; options: any } {
+    if (type === 'google_streets') {
+      return {
+        url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        options: { maxZoom: 20, attribution: '&copy; Google Maps' },
+      };
+    }
+    if (type === 'google_hybrid') {
+      return {
+        url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        options: { maxZoom: 20, attribution: '&copy; Google Hybrid &copy; Google Maps' },
+      };
+    }
+    return {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' },
+    };
+  }
 
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
@@ -60,12 +80,10 @@ function LeafletMapComponent({
       zoomControl: true,
     });
 
-    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    });
-    streetLayer.addTo(map);
-    tileLayerRef.current = streetLayer;
+    const cfg = getTileConfig(mapType);
+    const tileLayer = L.tileLayer(cfg.url, cfg.options);
+    tileLayer.addTo(map);
+    tileLayerRef.current = tileLayer;
 
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
@@ -76,24 +94,15 @@ function LeafletMapComponent({
     };
   }, []);
 
-  // Handle Layer Toggle (Street / Satellite)
+  // Handle Layer Toggle (Google Streets / Google Hybrid / OSM)
   useEffect(() => {
     const map = mapInstanceRef.current;
     const L = (window as any).L;
     if (!map || !L || !tileLayerRef.current) return;
 
     map.removeLayer(tileLayerRef.current);
-    if (mapType === 'satellite') {
-      tileLayerRef.current = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, attribution: '&copy; Esri World Imagery' }
-      ).addTo(map);
-    } else {
-      tileLayerRef.current = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors',
-      }).addTo(map);
-    }
+    const cfg = getTileConfig(mapType);
+    tileLayerRef.current = L.tileLayer(cfg.url, cfg.options).addTo(map);
   }, [mapType]);
 
   // Update Markers & Circles
@@ -167,7 +176,10 @@ function LeafletMapComponent({
       `;
 
       marker.bindPopup(popupContent);
-      marker.on('click', () => onSelect(d));
+      marker.on('click', () => {
+        lastFlyIdRef.current = d.device_id;
+        onSelect(d);
+      });
 
       if (isSelected) {
         marker.openPopup();
@@ -178,11 +190,14 @@ function LeafletMapComponent({
       const sLat = Number(selected.latitude);
       const sLng = Number(selected.longitude);
       if (!isNaN(sLat) && !isNaN(sLng)) {
-        map.flyTo([sLat, sLng], 16, { duration: 1 });
+        if (lastFlyIdRef.current !== selected.device_id) {
+          lastFlyIdRef.current = selected.device_id;
+          map.flyTo([sLat, sLng], 16, { duration: 0.8 });
+        }
       }
-    } else if (devices.length === 1) {
+    } else if (devices.length === 1 && !lastFlyIdRef.current) {
       map.setView([Number(devices[0].latitude), Number(devices[0].longitude)], 15);
-    } else if (devices.length > 1) {
+    } else if (devices.length > 1 && !lastFlyIdRef.current) {
       map.fitBounds(bounds, { padding: [50, 50] });
     }
   }, [devices, selected]);
@@ -192,22 +207,31 @@ function LeafletMapComponent({
       {/* Map Style Controls */}
       <div className="absolute top-4 right-4 z-[500] flex gap-1 bg-gray-900/90 backdrop-blur border border-gray-700/80 rounded-xl p-1 shadow-lg text-xs">
         <button
-          onClick={() => setMapType('streets')}
+          onClick={() => setMapType('google_streets')}
           className={clsx(
             'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
-            mapType === 'streets' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+            mapType === 'google_streets' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
           )}
         >
-          Street View
+          Google Map
         </button>
         <button
-          onClick={() => setMapType('satellite')}
+          onClick={() => setMapType('google_hybrid')}
           className={clsx(
             'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
-            mapType === 'satellite' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+            mapType === 'google_hybrid' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
           )}
         >
-          Satellite
+          Satellite + Places
+        </button>
+        <button
+          onClick={() => setMapType('osm')}
+          className={clsx(
+            'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
+            mapType === 'osm' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+          )}
+        >
+          OpenStreetMap
         </button>
       </div>
 
@@ -288,6 +312,7 @@ function GoogleMapComponent({
 export default function TrackingPage() {
   const [devices, setDevices] = useState<LiveDevice[]>([]);
   const [selected, setSelected] = useState<LiveDevice | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -297,6 +322,11 @@ export default function TrackingPage() {
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
   const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? '';
+
+  function handleSelectDevice(device: LiveDevice) {
+    selectedIdRef.current = device.device_id;
+    setSelected(device);
+  }
 
   // Load Leaflet Assets on Mount
   useEffect(() => {
@@ -351,10 +381,14 @@ export default function TrackingPage() {
         setDevices(data.data);
         setLastRefresh(new Date());
 
-        if (selected) {
-          const updated = data.data.find((d: LiveDevice) => d.device_id === selected.device_id);
-          if (updated) setSelected(updated);
+        const currentSelectedId = selectedIdRef.current;
+        if (currentSelectedId) {
+          const matching = data.data.find((d: LiveDevice) => d.device_id === currentSelectedId);
+          if (matching) {
+            setSelected(matching);
+          }
         } else if (data.data.length > 0) {
+          selectedIdRef.current = data.data[0].device_id;
           setSelected(data.data[0]);
         }
       }
@@ -531,7 +565,7 @@ export default function TrackingPage() {
                 return (
                   <button
                     key={d.device_id}
-                    onClick={() => setSelected(d)}
+                    onClick={() => handleSelectDevice(d)}
                     className={clsx(
                       'w-full text-left p-3 rounded-xl transition-all cursor-pointer border',
                       isSelected
@@ -588,7 +622,7 @@ export default function TrackingPage() {
               <LeafletMapComponent
                 devices={devices}
                 selected={selected}
-                onSelect={setSelected}
+                onSelect={handleSelectDevice}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-950">
@@ -634,7 +668,10 @@ export default function TrackingPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setSelected(null)}
+                  onClick={() => {
+                    selectedIdRef.current = null;
+                    setSelected(null);
+                  }}
                   className="text-gray-400 hover:text-white text-xl leading-none px-2 py-1 cursor-pointer"
                 >
                   ×
