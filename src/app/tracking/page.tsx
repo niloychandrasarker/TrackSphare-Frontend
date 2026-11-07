@@ -173,7 +173,7 @@ function LeafletMapComponent({
             ${stale ? '⚠️ Stale Fix' : '🟢 Real GPS (Live)'} • ${new Date(d.recorded_at).toLocaleTimeString()}
           </div>
           <a href="/locations?deviceId=${d.device_id}" style="display: flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none; margin-top: 8px; padding: 6px 10px; background: #4f46e5; color: #ffffff; border-radius: 8px; font-size: 11px; font-weight: 700;">
-            ⏱️ Location History (কখন কোথায় ছিল)
+            ⏱️ Location History
           </a>
         </div>
       `;
@@ -606,17 +606,17 @@ export default function TrackingPage() {
                       <span>{new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                     </div>
 
-                    {/* ⏱️ LOCATION HISTORY BUTTON (কখন কোথায় ছিল) */}
+                    {/* ⏱️ LOCATION HISTORY BUTTON */}
                     <div className="mt-2.5 pt-2 border-t border-gray-800/60 flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-gray-500 font-medium">Day Journey</span>
+                      <span className="text-[10px] text-gray-500 font-medium">Day Schedule</span>
                       <a
                         href={`/locations?deviceId=${d.device_id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
-                        title="View where this user was throughout the day"
+                        title="View Location Schedule & History"
                       >
                         <Clock className="w-3.5 h-3.5" />
-                        Location History (কখন কোথায় ছিল)
+                        Location History
                       </a>
                     </div>
                   </div>
@@ -737,14 +737,14 @@ export default function TrackingPage() {
                 </div>
               )}
 
-              {/* ⏱️ Direct Button to Location History (কখন কোথায় ছিল) */}
+              {/* ⏱️ Direct Button to Location History */}
               <div className="mt-3 pt-3 border-t border-gray-700/60">
                 <a
                   href={`/locations?deviceId=${selected.device_id}`}
                   className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer"
                 >
                   <Clock className="w-4 h-4" />
-                  View Day Location History (কখন কোথায় ছিল)
+                  Location History
                 </a>
               </div>
             </div>

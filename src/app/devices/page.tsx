@@ -104,17 +104,26 @@ export default function DevicesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Devices</h1>
           <p className="text-gray-400 text-sm mt-1">Manage registered devices and viewer access</p>
         </div>
-        <button
-          onClick={() => setShowRegister(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Register Device
-        </button>
+        <div className="flex items-center gap-2.5">
+          <a
+            href="/tracking"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-emerald-600/20"
+          >
+            <Radio className="w-4 h-4 animate-pulse" />
+            Live Location Track
+          </a>
+          <button
+            onClick={() => setShowRegister(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Register Device
+          </button>
+        </div>
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-xl text-red-300 text-sm">{error}</div>}
@@ -199,26 +208,46 @@ export default function DevicesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {/* 🛰️ Live Location Track Button */}
+                <a
+                  href="/tracking"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/70 border border-emerald-800 hover:bg-emerald-800 text-emerald-300 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  title="View Real-Time Live Location on Map"
+                >
+                  <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  Live Track
+                </a>
+
+                {/* ⏱️ Location History Button */}
+                <a
+                  href={`/locations?deviceId=${d.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-950/70 border border-indigo-800 hover:bg-indigo-800 text-indigo-300 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  title="View Location Schedule & History"
+                >
+                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                  Location History
+                </a>
+
                 <span className={clsx('px-3 py-1 rounded-full text-xs font-medium', d.sharing_enabled ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-400')}>
                   {d.sharing_enabled ? <><Radio className="w-3 h-3 inline mr-1" />Sharing ON</> : <><WifiOff className="w-3 h-3 inline mr-1" />Sharing OFF</>}
                 </span>
                 <button
                   onClick={() => toggleSharing(d.id, d.sharing_enabled)}
-                  className={clsx('px-3 py-1.5 rounded-xl text-xs font-medium transition-colors', d.sharing_enabled ? 'bg-red-900/40 text-red-400 hover:bg-red-900/60' : 'bg-green-900/40 text-green-400 hover:bg-green-900/60')}
+                  className={clsx('px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer', d.sharing_enabled ? 'bg-red-900/40 text-red-400 hover:bg-red-900/60' : 'bg-green-900/40 text-green-400 hover:bg-green-900/60')}
                 >
                   {d.sharing_enabled ? 'Stop' : 'Start'}
                 </button>
                 <button
                   onClick={() => setInviteDeviceId(d.id)}
-                  className="px-3 py-1.5 bg-indigo-900/40 text-indigo-400 hover:bg-indigo-900/60 rounded-xl text-xs font-medium transition-colors"
+                  className="px-3 py-1.5 bg-indigo-900/40 text-indigo-400 hover:bg-indigo-900/60 rounded-xl text-xs font-medium transition-colors cursor-pointer"
                   title="Invite Viewer"
                 >
                   <UserPlus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => deleteDevice(d.id)}
-                  className="px-3 py-1.5 bg-red-950/40 text-red-400 hover:bg-red-900/60 rounded-xl text-xs font-medium transition-colors"
+                  className="px-3 py-1.5 bg-red-950/40 text-red-400 hover:bg-red-900/60 rounded-xl text-xs font-medium transition-colors cursor-pointer"
                   title="Revoke Device"
                 >
                   <Trash2 className="w-4 h-4" />
