@@ -10,13 +10,13 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 
 const navItems = [
-  { href: '/dashboard',    label: 'Overview',      icon: LayoutDashboard },
-  { href: '/tracking',     label: 'Live Tracking',  icon: MapPin },
-  { href: '/devices',      label: 'Devices',        icon: Smartphone },
-  { href: '/locations',    label: 'History',        icon: History },
-  { href: '/users',        label: 'Users',          icon: Users },
-  { href: '/audit-logs',   label: 'Audit Logs',     icon: FileText },
-  { href: '/app-download', label: 'Mobile App',     icon: Download },
+  { href: '/dashboard',    label: 'Overview',         icon: LayoutDashboard },
+  { href: '/tracking',     label: 'Live Tracking',    icon: MapPin },
+  { href: '/devices',      label: 'Devices',          icon: Smartphone },
+  { href: '/locations',    label: 'Location History', icon: History },
+  { href: '/users',        label: 'Users',            icon: Users },
+  { href: '/audit-logs',   label: 'Audit Logs',       icon: FileText },
+  { href: '/app-download', label: 'Mobile App',       icon: Download },
 ];
 
 export default function Sidebar() {

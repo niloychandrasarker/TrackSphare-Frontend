@@ -740,10 +740,11 @@ export default function TrackingPage() {
                     </button>
                     <a
                       href={`/locations?deviceId=${selected.device_id}`}
-                      className="p-1.5 bg-indigo-950 hover:bg-indigo-900 border border-indigo-800/80 text-indigo-300 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1"
-                      title="Location History"
+                      className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer flex items-center gap-1.5"
+                      title="View Location Schedule & History"
                     >
                       <Clock className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Location History</span>
                     </a>
                     <button
                       onClick={() => setIsCardMinimized(false)}

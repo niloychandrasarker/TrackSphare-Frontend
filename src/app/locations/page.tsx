@@ -61,7 +61,7 @@ export default function LocationHistoryPage() {
   const [devices, setDevices] = useState<any[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | '30min'>('all');
-  const [preset, setPreset] = useState<'today' | 'yesterday' | '24h' | 'custom'>('today');
+  const [preset, setPreset] = useState<'all' | '24h' | 'today' | 'yesterday' | 'custom'>('all');
 
   const [fromTime, setFromTime] = useState('');
   const [toTime, setToTime] = useState('');
@@ -170,10 +170,8 @@ export default function LocationHistoryPage() {
     }
   }, []);
 
-  // Fetch all devices on mount & set default date (Today)
+  // Fetch all devices on mount & load all history by default
   useEffect(() => {
-    applyPreset('today');
-
     // Check if a deviceId was passed via URL query (e.g. /locations?deviceId=...)
     const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const urlDevId = sp?.get('deviceId');
@@ -191,7 +189,7 @@ export default function LocationHistoryPage() {
           }
           if (target) {
             setSelectedDeviceId(target);
-            fetchHistory(target);
+            applyPreset('all', target);
           }
         }
       })
@@ -199,27 +197,45 @@ export default function LocationHistoryPage() {
       .finally(() => setLoadingDevices(false));
   }, []);
 
-  // Apply Quick Date Schedule Presets
-  function applyPreset(p: 'today' | 'yesterday' | '24h' | 'custom') {
+  // Apply Quick Date Schedule Presets & immediately query
+  function applyPreset(p: 'all' | '24h' | 'today' | 'yesterday' | 'custom', devIdOverride?: string) {
     setPreset(p);
     const now = new Date();
+    let newFrom = '';
+    let newTo = '';
 
-    if (p === 'today') {
+    if (p === 'all') {
+      newFrom = '';
+      newTo = '';
+      setFromTime('');
+      setToTime('');
+    } else if (p === '24h') {
+      const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      newFrom = formatDateTimeLocal(past24h);
+      newTo = formatDateTimeLocal(now);
+      setFromTime(newFrom);
+      setToTime(newTo);
+    } else if (p === 'today') {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-      setFromTime(formatDateTimeLocal(start));
-      setToTime(formatDateTimeLocal(end));
+      newFrom = formatDateTimeLocal(start);
+      newTo = formatDateTimeLocal(end);
+      setFromTime(newFrom);
+      setToTime(newTo);
     } else if (p === 'yesterday') {
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
       const start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
       const end = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-      setFromTime(formatDateTimeLocal(start));
-      setToTime(formatDateTimeLocal(end));
-    } else if (p === '24h') {
-      const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      setFromTime(formatDateTimeLocal(past24h));
-      setToTime(formatDateTimeLocal(now));
+      newFrom = formatDateTimeLocal(start);
+      newTo = formatDateTimeLocal(end);
+      setFromTime(newFrom);
+      setToTime(newTo);
+    }
+
+    const targetDev = devIdOverride || selectedDeviceId;
+    if (targetDev) {
+      fetchHistory(targetDev, newFrom, newTo);
     }
   }
 
@@ -250,21 +266,15 @@ export default function LocationHistoryPage() {
         offset: '0',
       });
 
-      const activeFrom = overrideFrom || fromTime;
-      const activeTo = overrideTo || toTime;
+      const activeFrom = overrideFrom !== undefined ? overrideFrom : fromTime;
+      const activeTo = overrideTo !== undefined ? overrideTo : toTime;
 
       if (activeFrom) {
         try { params.set('from', new Date(activeFrom).toISOString()); } catch {}
-      } else {
-        const d = new Date();
-        params.set('from', new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).toISOString());
       }
 
       if (activeTo) {
         try { params.set('to', new Date(activeTo).toISOString()); } catch {}
-      } else {
-        const d = new Date();
-        params.set('to', new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString());
       }
 
       const res = await fetch(`/api/v1/locations/history?${params.toString()}`, {
@@ -726,16 +736,17 @@ export default function LocationHistoryPage() {
               </span>
               <div className="flex items-center gap-1.5">
                 {[
+                  { id: 'all', label: 'All History (সকল হিস্ট্রি)' },
+                  { id: '24h', label: 'Past 24 Hours' },
                   { id: 'today', label: 'Today (All Day)' },
                   { id: 'yesterday', label: 'Yesterday' },
-                  { id: '24h', label: 'Past 24 Hours' },
                 ].map(item => (
                   <button
                     key={item.id}
                     onClick={() => applyPreset(item.id as any)}
                     className={clsx(
                       'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                      preset === item.id ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                      preset === item.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-800 text-gray-400 hover:text-white'
                     )}
                   >
                     {item.label}
@@ -932,12 +943,20 @@ export default function LocationHistoryPage() {
               <p className="text-xs text-gray-400 max-w-sm mb-4">
                 No location fixes were recorded for this device during the selected time period.
               </p>
-              <button
-                onClick={() => applyPreset('24h')}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow cursor-pointer transition-colors"
-              >
-                Try Past 24 Hours
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={() => applyPreset('all')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 cursor-pointer transition-all active:scale-95"
+                >
+                  ⚡ Show All History (সকল হিস্ট্রি)
+                </button>
+                <button
+                  onClick={() => applyPreset('24h')}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold shadow cursor-pointer transition-colors"
+                >
+                  Try Past 24 Hours
+                </button>
+              </div>
             </div>
           )}
         </div>
