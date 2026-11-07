@@ -27,7 +27,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.4",
     "@tailwindcss/turbopack": "^4",
-    "@types/bcryptjs": "^3.0.0",
     "@types/google.maps": "^3.66.9",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
