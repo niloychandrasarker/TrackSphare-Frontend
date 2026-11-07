@@ -24,7 +24,7 @@ interface LiveDevice {
 }
 
 function isStale(recordedAt: string): boolean {
-  return Date.now() - new Date(recordedAt).getTime() > 10 * 60 * 1000;
+  return Date.now() - new Date(recordedAt).getTime() > 2 * 60 * 1000;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,10 +400,10 @@ export default function TrackingPage() {
     }
   }
 
-  // Live auto-polling every 10 seconds and auto-detect real location
+  // Live auto-polling every 2.5 seconds for real-time tracking
   useEffect(() => {
     fetchLocations();
-    const interval = setInterval(fetchLocations, 10_000);
+    const interval = setInterval(fetchLocations, 2500);
     return () => clearInterval(interval);
   }, []);
 
@@ -473,11 +473,11 @@ export default function TrackingPage() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             Live Device Tracking
             <span className="px-2.5 py-0.5 text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-full font-mono flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Live Telemetry
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Real-Time Live (2.5s Stream)
             </span>
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Real-time coordinates streamed from mobile agents • Auto-refreshes every 10s
+            Real-time coordinates streamed from mobile agents • Live sub-3s telemetry sync
           </p>
         </div>
 

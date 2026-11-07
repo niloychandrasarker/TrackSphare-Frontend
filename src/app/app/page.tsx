@@ -42,6 +42,7 @@ export default function MobileAppPage() {
   const latestCoordsRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null);
   const deviceIdRef = useRef<string>('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastSentTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -321,12 +322,19 @@ export default function MobileAppPage() {
         };
         setCoords(c);
         latestCoordsRef.current = c;
+
+        // Instant Realtime GPS transmission when position changes (throttled to max 1 per 2.5s)
+        const now = Date.now();
+        if (now - lastSentTimeRef.current >= 2500) {
+          lastSentTimeRef.current = now;
+          sendLocationUpdate(c.lat, c.lng, c.accuracy, targetDevId);
+        }
       },
       (err) => {
         console.warn('Geolocation error:', err.message);
         setError('Location permission required. Please allow access.');
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
     );
 
     navigator.geolocation.getCurrentPosition((pos) => {
@@ -337,22 +345,28 @@ export default function MobileAppPage() {
       };
       setCoords(c);
       latestCoordsRef.current = c;
+      lastSentTimeRef.current = Date.now();
       sendLocationUpdate(c.lat, c.lng, c.accuracy, targetDevId);
     });
 
     if (intervalIdRef.current !== null) {
       clearInterval(intervalIdRef.current);
     }
+    // High-frequency realtime heartbeat every 4 seconds
     intervalIdRef.current = setInterval(() => {
       if (latestCoordsRef.current) {
-        sendLocationUpdate(
-          latestCoordsRef.current.lat,
-          latestCoordsRef.current.lng,
-          latestCoordsRef.current.accuracy,
-          targetDevId
-        );
+        const now = Date.now();
+        if (now - lastSentTimeRef.current >= 3500) {
+          lastSentTimeRef.current = now;
+          sendLocationUpdate(
+            latestCoordsRef.current.lat,
+            latestCoordsRef.current.lng,
+            latestCoordsRef.current.accuracy,
+            targetDevId
+          );
+        }
       }
-    }, 25000);
+    }, 4000);
   }
 
   function stopTrackingExplicit() {
