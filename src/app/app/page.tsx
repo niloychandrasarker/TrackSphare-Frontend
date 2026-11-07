@@ -4,9 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Smartphone, MapPin, Radio, WifiOff, Battery, ShieldCheck,
   CheckCircle2, AlertCircle, RefreshCw, ArrowLeft, Activity,
-  Lock, Camera, User, Edit3, PlusCircle, Clock
+  Lock, Camera, User, Edit3, PlusCircle, Clock, Navigation,
+  Crosshair, Layers, Globe, Download, ExternalLink, Compass
 } from 'lucide-react';
 import Link from 'next/link';
+import clsx from 'clsx';
 
 function generateDeviceUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -18,6 +20,8 @@ function generateDeviceUUID(): string {
 export default function MobileAppPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [speed, setSpeed] = useState<number | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<string>('Initializing device...');
   const [syncCount, setSyncCount] = useState(0);
@@ -36,6 +40,15 @@ export default function MobileAppPage() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [error, setError] = useState<string>('');
+
+  // Map state
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [mapType, setMapType] = useState<'google_streets' | 'google_hybrid' | 'osm'>('google_streets');
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
 
   const watchIdRef = useRef<number | null>(null);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
@@ -96,6 +109,151 @@ export default function MobileAppPage() {
         silentAudioRef.current = null;
       }
     } catch {}
+  }
+
+  // Load Leaflet dynamically
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if ((window as any).L) {
+      setLeafletLoaded(true);
+      return;
+    }
+
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    if (!document.getElementById('leaflet-js')) {
+      const script = document.createElement('script');
+      script.id = 'leaflet-js';
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => setLeafletLoaded(true);
+      document.head.appendChild(script);
+    } else {
+      setLeafletLoaded(true);
+    }
+  }, []);
+
+  // Initialize Map
+  useEffect(() => {
+    if (!leafletLoaded || !mapContainerRef.current || mapInstanceRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const initialCenter = coords ? [coords.lat, coords.lng] : [23.8103, 90.4125];
+
+    const map = L.map(mapContainerRef.current, {
+      center: initialCenter,
+      zoom: coords ? 16 : 14,
+      zoomControl: true,
+    });
+
+    const cfg = getTileConfig(mapType);
+    const tileLayer = L.tileLayer(cfg.url, cfg.options);
+    tileLayer.addTo(map);
+    tileLayerRef.current = tileLayer;
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [leafletLoaded]);
+
+  // Tile Config
+  function getTileConfig(type: 'google_streets' | 'google_hybrid' | 'osm') {
+    if (type === 'google_streets') {
+      return {
+        url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        options: { maxZoom: 20, attribution: '&copy; Google Maps' },
+      };
+    }
+    if (type === 'google_hybrid') {
+      return {
+        url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        options: { maxZoom: 20, attribution: '&copy; Google Hybrid &copy; Google Maps' },
+      };
+    }
+    return {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' },
+    };
+  }
+
+  // Handle Layer Toggle
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const L = (window as any).L;
+    if (!map || !L || !tileLayerRef.current) return;
+
+    map.removeLayer(tileLayerRef.current);
+    const cfg = getTileConfig(mapType);
+    tileLayerRef.current = L.tileLayer(cfg.url, cfg.options).addTo(map);
+  }, [mapType]);
+
+  // Update Map Marker & Accuracy Circle when coords change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const L = (window as any).L;
+    if (!map || !L || !coords) return;
+
+    const latLng: [number, number] = [coords.lat, coords.lng];
+
+    // Marker HTML with glowing live ping
+    const iconHtml = `
+      <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: #10b981; opacity: 0.3; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: #10b981; border: 3px solid #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px; z-index: 10;">
+          ME
+        </div>
+      </div>
+    `;
+
+    const customIcon = L.divIcon({
+      className: 'my-location-marker',
+      html: iconHtml,
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+    });
+
+    if (markerRef.current) {
+      markerRef.current.setLatLng(latLng);
+      markerRef.current.setIcon(customIcon);
+    } else {
+      markerRef.current = L.marker(latLng, { icon: customIcon }).addTo(map);
+    }
+
+    if (circleRef.current) {
+      circleRef.current.setLatLng(latLng);
+      circleRef.current.setRadius(coords.accuracy || 20);
+    } else {
+      circleRef.current = L.circle(latLng, {
+        radius: coords.accuracy || 20,
+        color: '#10b981',
+        fillColor: '#10b981',
+        fillOpacity: 0.12,
+        weight: 1.5,
+      }).addTo(map);
+    }
+
+    // Auto-center map on first fix
+    if (!mapInstanceRef.current._hasInitiallyCentered) {
+      map.setView(latLng, 16);
+      mapInstanceRef.current._hasInitiallyCentered = true;
+    }
+  }, [coords]);
+
+  function handleCenterMap() {
+    const map = mapInstanceRef.current;
+    if (map && coords) {
+      map.flyTo([coords.lat, coords.lng], 17, { duration: 0.8 });
+    }
   }
 
   useEffect(() => {
@@ -293,10 +451,8 @@ export default function MobileAppPage() {
     );
     if (!confirmReset) return;
 
-    // Stop current tracking
     stopTrackingExplicit();
 
-    // Generate fresh device ID
     const newId = generateDeviceUUID();
     localStorage.setItem('tracksphere_device_uuid', newId);
     localStorage.removeItem('tracksphere_is_registered');
@@ -347,7 +503,7 @@ export default function MobileAppPage() {
       if (res.ok) {
         setSyncCount(c => c + 1);
         setLastSyncTime(new Date().toLocaleTimeString());
-        setSyncStatus(`Live GPS Synced (Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}) • Persistent`);
+        setSyncStatus(`Live GPS Synced (${lat.toFixed(4)}, ${lng.toFixed(4)}) • Persistent`);
       } else {
         setSyncStatus('Server acknowledged receipt');
       }
@@ -368,13 +524,14 @@ export default function MobileAppPage() {
           accuracy: pos.coords.accuracy,
         };
         setCoords(c);
+        if (pos.coords.speed != null) setSpeed(Math.round(pos.coords.speed * 3.6)); // km/h
+        if (pos.coords.heading != null) setHeading(Math.round(pos.coords.heading));
         latestCoordsRef.current = c;
         lastSentTimeRef.current = Date.now();
         sendLocationUpdate(c.lat, c.lng, c.accuracy, devId);
       },
       (err) => {
         console.warn('Active ping warning:', err.message);
-        // If GPS hardware is temporarily busy, resend latest coords so the server knows the device is live
         if (latestCoordsRef.current) {
           sendLocationUpdate(
             latestCoordsRef.current.lat,
@@ -401,10 +558,7 @@ export default function MobileAppPage() {
     localStorage.setItem('tracksphere_sharing_active', 'true');
     setSyncStatus('Continuous Real-Time GPS Active • Broadcasting...');
 
-    // 1. Keep phone screen awake
     requestWakeLock();
-
-    // 2. Start silent audio loop to prevent mobile tab sleep
     startSilentAudio();
 
     if (targetDevId) {
@@ -424,10 +578,8 @@ export default function MobileAppPage() {
       }).catch(() => {});
     }
 
-    // 3. Immediately send fresh satellite GPS fix
     forceGpsPing(targetDevId);
 
-    // 4. Watch position for motion deltas
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
@@ -439,6 +591,8 @@ export default function MobileAppPage() {
           accuracy: pos.coords.accuracy,
         };
         setCoords(c);
+        if (pos.coords.speed != null) setSpeed(Math.round(pos.coords.speed * 3.6));
+        if (pos.coords.heading != null) setHeading(Math.round(pos.coords.heading));
         latestCoordsRef.current = c;
 
         const now = Date.now();
@@ -453,7 +607,6 @@ export default function MobileAppPage() {
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 8000 }
     );
 
-    // 5. Active GPS Heartbeat polling every 3.5 seconds
     if (intervalIdRef.current !== null) {
       clearInterval(intervalIdRef.current);
     }
@@ -514,342 +667,393 @@ export default function MobileAppPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center justify-center p-4 selection:bg-indigo-500">
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        {/* Glowing top line */}
-        <div className={`absolute top-0 left-0 right-0 h-1.5 transition-colors duration-500 ${isSharing ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-gray-800'}`} />
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col font-sans selection:bg-indigo-500">
+      {/* ─── TOP WEB NAVIGATION BAR (MATCHES TRACKSPHERE WEB) ─── */}
+      <header className="bg-gray-900/90 backdrop-blur border-b border-gray-800 sticky top-0 z-[600]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* Logo & Brand */}
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/30">
+                <MapPin className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="text-white font-black text-lg tracking-tight">TrackSphere</span>
+                <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-400 border border-indigo-800">
+                  Mobile Client
+                </span>
+              </div>
+            </Link>
+          </div>
 
-        {/* Top Header */}
-        <div className="flex items-center justify-between mb-5">
-          <Link href="/" className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Home
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-gray-800 border border-gray-700/60 rounded-full text-[10px] font-mono text-gray-400" title={deviceId}>
-              ID: {deviceId ? `${deviceId.substring(0, 8)}...` : 'Generating'}
-            </span>
-            <div className="flex items-center gap-1 px-2.5 py-0.5 bg-gray-800 rounded-full text-xs text-gray-300">
+          {/* Quick Nav Links (Dashboard, Tracking, History) */}
+          <div className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-gray-400">
+            <Link href="/tracking" className="px-3 py-1.5 rounded-lg hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-indigo-400" />
+              Live Fleet Map
+            </Link>
+            <Link href="/locations" className="px-3 py-1.5 rounded-lg hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              Location History
+            </Link>
+            <Link href="/devices" className="px-3 py-1.5 rounded-lg hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+              Devices
+            </Link>
+          </div>
+
+          {/* Live Status Pill & Battery */}
+          <div className="flex items-center gap-2.5">
+            <div className={clsx(
+              'px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border',
+              isSharing
+                ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800 shadow-sm'
+                : 'bg-gray-800 text-gray-400 border-gray-700'
+            )}>
+              <span className={clsx('w-2 h-2 rounded-full', isSharing ? 'bg-emerald-400 animate-ping' : 'bg-gray-500')} />
+              <span>{isSharing ? 'STREAMING' : 'PAUSED'}</span>
+            </div>
+
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-gray-800 border border-gray-700/60 rounded-xl text-xs font-mono text-gray-300">
               <Battery className="w-3.5 h-3.5 text-emerald-400" />
               <span>{batteryLevel != null ? `${batteryLevel}%` : 'Phone'}</span>
             </div>
           </div>
         </div>
+      </header>
 
-        {/* ─── CASE A: REGISTRATION FORM (IF NOT REGISTERED OR EDITING) ─── */}
-        {(!isRegistered || isEditing) && (
-          <div className="bg-gradient-to-br from-gray-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-5 mb-6 text-center relative shadow-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4" />
-                {isRegistered ? 'Edit Device Details' : 'Register This Device'}
-              </span>
-              {isRegistered && (
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="text-xs text-gray-400 hover:text-white"
-                >
-                  Cancel
-                </button>
+      {/* ─── MAIN CONTENT: DASHBOARD GRID ─── */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Page Title & Subtitle */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
+              <Smartphone className="w-6 h-6 text-indigo-400" />
+              <span>Mobile Location Tracker &amp; Streaming Hub</span>
+            </h1>
+            <p className="text-gray-400 text-xs sm:text-sm mt-1">
+              Consent-driven real-time GPS telemetry broadcast. Streams coordinates continuously to the TrackSphere admin map.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isInstallable && (
+              <button
+                onClick={handleInstallClick}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Install on Phone
+              </button>
+            )}
+            <Link
+              href={`/locations?deviceId=${deviceId}`}
+              className="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+            >
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              My History
+            </Link>
+          </div>
+        </div>
+
+        {/* ─── TWO-COLUMN WORKSPACE: CONTROLS (4 COLS) + INTERACTIVE MAP (8 COLS) ─── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
+          {/* LEFT COLUMN: Controls & Device Profile (4 cols) */}
+          <div className="lg:col-span-4 space-y-5 flex flex-col">
+            {/* Device Profile Card */}
+            {(!isRegistered || isEditing) ? (
+              <div className="bg-gray-900 border border-indigo-500/40 rounded-2xl p-5 shadow-xl relative">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4" />
+                    {isRegistered ? 'Edit Device Details' : 'Register This Device'}
+                  </span>
+                  {isRegistered && (
+                    <button onClick={() => setIsEditing(false)} className="text-xs text-gray-400 hover:text-white">
+                      Cancel
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative w-20 h-20 mx-auto mb-3">
+                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-indigo-500 flex items-center justify-center bg-gray-800 shadow-md">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt="User Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-9 h-9 text-gray-500" />
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg cursor-pointer border border-gray-900"
+                    title="Upload Photo to ImageKit"
+                  >
+                    {isUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] text-gray-300 font-semibold block mb-1">Your Name *</label>
+                    <input
+                      type="text"
+                      value={userName}
+                      onChange={e => setUserName(e.target.value)}
+                      placeholder="e.g. Niloy Chandra Sarker"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-300 font-semibold block mb-1">Device Name / Model *</label>
+                    <input
+                      type="text"
+                      value={deviceName}
+                      onChange={e => setDeviceName(e.target.value)}
+                      placeholder="e.g. My Device (honor 200 pro)"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleRegisterDevice}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-1"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isRegistered ? 'Save Changes' : 'Register & Start Tracking'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl">
+                <div className="flex items-center gap-3.5">
+                  <div className={clsx(
+                    'w-14 h-14 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-gray-800 shrink-0 shadow-md',
+                    isSharing ? 'border-emerald-500 shadow-emerald-500/20' : 'border-gray-700'
+                  )}>
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={userName} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-7 h-7 text-gray-400" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-white truncate">{userName || 'Registered User'}</h3>
+                      <button onClick={() => setIsEditing(true)} className="p-1 text-gray-400 hover:text-white" title="Edit Profile">
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-indigo-400 font-semibold truncate mt-0.5">{deviceName}</p>
+                    <p className="text-[10px] text-gray-500 font-mono truncate mt-0.5">ID: {deviceId}</p>
+                  </div>
+                </div>
+
+                {saveSuccessMsg && (
+                  <p className="mt-2 text-[11px] text-emerald-400 font-mono text-center">{saveSuccessMsg}</p>
+                )}
+              </div>
+            )}
+
+            {/* Sharing Toggle Card */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  Telemetry Broadcast
+                </span>
+                <span className={clsx(
+                  'px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono',
+                  isSharing ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-gray-800 text-gray-400'
+                )}>
+                  {isSharing ? 'ACTIVE 24/7' : 'OFF'}
+                </span>
+              </div>
+
+              <button
+                onClick={handleToggleSharing}
+                disabled={!isRegistered}
+                className={clsx(
+                  'w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-98',
+                  !isRegistered
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : isSharing
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                )}
+              >
+                {isSharing ? (
+                  <>
+                    <WifiOff className="w-4 h-4" />
+                    Stop Location Sharing
+                  </>
+                ) : (
+                  <>
+                    <Radio className="w-4 h-4 animate-pulse" />
+                    {isRegistered ? 'Resume Live Sharing' : 'Register Device Above'}
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => forceGpsPing()}
+                disabled={!isRegistered}
+                className="w-full py-2 bg-gray-800 hover:bg-gray-750 border border-gray-700 text-gray-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                Transmit Instant GPS Fix Now
+              </button>
+            </div>
+
+            {/* Live Telemetry Overview Stats */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-xl space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">GPS Status:</span>
+                <span className="text-emerald-400 font-bold flex items-center gap-1 font-mono text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  Streaming Live (Every 3.5s)
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Keep-Awake:</span>
+                <span className="font-semibold text-[11px] font-mono text-indigo-400">
+                  {wakeLockActive ? '🟢 Screen WakeLock ON' : '🟢 Background Stream ON'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Coordinates:</span>
+                <span className="font-mono text-indigo-300 font-bold">
+                  {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Acquiring GPS...'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Precision:</span>
+                <span className="text-gray-200 font-mono">
+                  {coords ? `±${Math.round(coords.accuracy)}m` : 'N/A'}
+                </span>
+              </div>
+
+              {speed != null && speed > 0 && (
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Speed:</span>
+                  <span className="text-emerald-400 font-mono font-bold">{speed} km/h</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Fixes Broadcasted:</span>
+                <span className="text-emerald-400 font-mono font-bold">{syncCount} updates sent</span>
+              </div>
+
+              {lastSyncTime && (
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Last Broadcast:</span>
+                  <span className="text-gray-300 font-mono">{lastSyncTime}</span>
+                </div>
               )}
             </div>
 
-            <p className="text-xs text-gray-400 mb-4 text-left leading-relaxed">
-              Register this specific phone/browser. It will appear on the admin tracking map with its own individual marker, photo, and live coordinates.
-            </p>
-
-            {/* Avatar with Camera Icon */}
-            <div className="relative w-20 h-20 mx-auto mb-3">
-              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-indigo-500/60 flex items-center justify-center bg-gray-800 shadow-md">
-                {imageUrl ? (
-                  <img src={imageUrl} alt="User Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-9 h-9 text-gray-500" />
-                )}
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer border border-gray-900"
-                title="Upload Photo to ImageKit"
-              >
-                {isUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-
-            <p className="text-[11px] text-gray-400 mb-4">
-              {isUploading ? 'Uploading to ImageKit Cloud...' : 'Tap camera icon to upload photo (ImageKit)'}
-            </p>
-
-            <div className="space-y-3 text-left">
-              <div>
-                <label className="text-[11px] text-gray-300 font-semibold block mb-1">
-                  Your Name *
-                </label>
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={e => setUserName(e.target.value)}
-                  placeholder="e.g. Rahim Ahmed"
-                  className="w-full px-3.5 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] text-gray-300 font-semibold block mb-1">
-                  Device Name / Model *
-                </label>
-                <input
-                  type="text"
-                  value={deviceName}
-                  onChange={e => setDeviceName(e.target.value)}
-                  placeholder="e.g. Rahim's Samsung S24"
-                  className="w-full px-3.5 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                />
-              </div>
-
-              <button
-                onClick={handleRegisterDevice}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer mt-2"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {isRegistered ? 'Save Changes' : 'Register & Start Location Sharing'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ─── CASE B: REGISTERED DEVICE STATUS CARD ─── */}
-        {isRegistered && !isEditing && (
-          <div className="bg-gray-850/80 border border-gray-800 rounded-2xl p-4 mb-6 relative">
-            <div className="flex items-center gap-3">
-              <div className={`w-14 h-14 rounded-full overflow-hidden border-2 flex items-center justify-center bg-gray-800 shrink-0 ${
-                isSharing ? 'border-emerald-500 shadow-md shadow-emerald-500/20' : 'border-gray-700'
-              }`}>
-                {imageUrl ? (
-                  <img src={imageUrl} alt={userName} className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-7 h-7 text-gray-400" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white truncate">{userName || 'Registered Device'}</h3>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="p-1 text-gray-400 hover:text-white transition-colors"
-                    title="Edit name or photo"
+            {/* Android APK 24/7 Background Banner */}
+            <div className="bg-gradient-to-br from-emerald-950/40 via-gray-900 to-indigo-950/40 border border-emerald-800/60 rounded-2xl p-4 shadow-xl text-left">
+              <div className="flex items-start gap-3">
+                <Smartphone className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-white">24/7 Tracking With Browser Closed</h4>
+                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                    Want tracking to keep running in your pocket even when the browser is closed? Download our Android native APK.
+                  </p>
+                  <a
+                    href="/downloads/TrackSphere-release.apk"
+                    download="TrackSphere-release.apk"
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
+                    <Download className="w-3.5 h-3.5" />
+                    Download APK (6.45 MB)
+                  </a>
                 </div>
-                <p className="text-xs text-indigo-400 font-medium truncate">{deviceName}</p>
-                <p className="text-[10px] text-gray-500 font-mono truncate mt-0.5">ID: {deviceId}</p>
               </div>
             </div>
 
-            {saveSuccessMsg && (
-              <p className="mt-2 text-[11px] text-emerald-400 font-mono text-center">{saveSuccessMsg}</p>
-            )}
-          </div>
-        )}
-
-        {/* Install to Android Phone Banner */}
-        {isInstallable && (
-          <div className="mb-5 p-3.5 bg-indigo-950/40 border border-indigo-800/80 rounded-2xl flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold text-white">Install App on Phone</p>
-              <p className="text-[11px] text-gray-400">Installs directly to Home Screen like an APK.</p>
-            </div>
+            {/* Register Another Device Button */}
             <button
-              onClick={handleInstallClick}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shrink-0 transition-colors shadow-md cursor-pointer"
+              onClick={handleRegisterNewDevice}
+              className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-700 hover:border-indigo-500 text-gray-400 hover:text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              Install
+              <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+              Register Another Device From Here
             </button>
           </div>
-        )}
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-950/60 border border-red-800 rounded-xl text-red-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* ─── SHARING CONTROL CARD ─── */}
-        <div className="bg-gray-800/50 border border-gray-700/60 rounded-2xl p-5 text-center mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Location Sharing
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${isSharing ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-gray-800 text-gray-400'}`}>
-              {isSharing ? 'ACTIVE (PERSISTENT)' : 'PAUSED'}
-            </span>
-          </div>
-
-          <button
-            onClick={handleToggleSharing}
-            disabled={!isRegistered}
-            className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2.5 transition-all shadow-lg cursor-pointer ${
-              !isRegistered
-                ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
-                : isSharing
-                ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
-            }`}
-          >
-            {isSharing ? (
-              <>
-                <WifiOff className="w-4 h-4" />
-                Stop Location Sharing
-              </>
-            ) : (
-              <>
-                <Radio className="w-4 h-4" />
-                {isRegistered ? 'Resume Location Sharing' : 'Register Above First'}
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={() => {
-              if (navigator.geolocation) {
-                setSyncStatus('Acquiring instant GPS fix…');
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
-                    setCoords(c);
-                    sendLocationUpdate(c.lat, c.lng, c.accuracy);
-                    alert(`✓ Live Location Sent for "${userName || deviceName}"!\nLat: ${c.lat.toFixed(5)}, Lng: ${c.lng.toFixed(5)}`);
-                  },
-                  (err) => alert('Location error: ' + err.message + '. Please allow location access in your browser.'),
-                  { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-                );
-              }
-            }}
-            disabled={!isRegistered}
-            className="w-full mt-2.5 py-2 bg-gray-700/80 hover:bg-gray-700 text-gray-200 border border-gray-600/80 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
-            Send Instant GPS Fix to Admin Map
-          </button>
-
-          <div className="mt-3 p-2 bg-gray-900/60 rounded-xl border border-gray-800 text-[10px] text-gray-400 flex items-center justify-center gap-1.5 text-center">
-            <Lock className="w-3 h-3 text-indigo-400 shrink-0" />
-            <span>
-              {isSharing
-                ? 'Persistent: Location stays ON even if browser/app is closed. Only turns off via "Stop Location Sharing".'
-                : 'Sharing is turned OFF.'}
-            </span>
-          </div>
-        </div>
-
-        {/* ─── LIVE GPS TELEMETRY ─── */}
-        <div className="bg-gray-850/60 border border-gray-800 rounded-2xl p-4 space-y-2.5 mb-4 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400">Live Streaming:</span>
-            <span className="text-emerald-400 font-bold flex items-center gap-1 font-mono text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              Real-time Active (Every 3.5s)
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Keep-Screen-Awake:</span>
-            <span className="font-semibold text-[11px] font-mono text-indigo-400">
-              {wakeLockActive ? '🟢 Screen WakeLock ON' : '🟢 Background Stream Active'}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Schedule Logging:</span>
-            <span className="text-indigo-300 font-semibold flex items-center gap-1 font-mono text-[11px]">
-              <Clock className="w-3.5 h-3.5 text-indigo-400" /> Every 30 Mins Logged
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Status:</span>
-            <span className="font-medium text-white truncate max-w-[230px]">{syncStatus}</span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Coordinates:</span>
-            <span className="font-mono text-indigo-300">
-              {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Waiting for GPS fix...'}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Accuracy:</span>
-            <span className="text-gray-300 font-mono">
-              {coords ? `±${Math.round(coords.accuracy)}m` : 'N/A'}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-400">
-            <span>Checkpoints Saved:</span>
-            <span className="text-emerald-400 font-mono font-bold">{syncCount} fixes broadcasted</span>
-          </div>
-
-          {lastSyncTime && (
-            <div className="flex items-center justify-between text-gray-400">
-              <span>Last Broadcast:</span>
-              <span className="text-emerald-300 font-mono font-semibold">{lastSyncTime}</span>
-            </div>
-          )}
-        </div>
-
-        {/* 📲 OFFICIAL ANDROID APK DOWNLOAD CARD FOR 24/7 BACKGROUND TRACKING */}
-        <div className="mb-4 p-3.5 bg-gradient-to-r from-emerald-950/40 via-gray-900 to-indigo-950/40 border border-emerald-700/60 rounded-2xl text-left">
-          <div className="flex items-start gap-3">
-            <Smartphone className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-xs font-bold text-white">24/7 Pocket Tracking on Android</h4>
-              <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
-                Want continuous real-time tracking even when your phone is locked in your pocket without keeping the browser open? Install our signed native Android APK.
-              </p>
-              <a
-                href="/downloads/TrackSphere-release.apk"
-                download="TrackSphere-v1.2.0.apk"
-                className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
+          {/* RIGHT COLUMN: Interactive Live Map (8 cols) */}
+          <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden relative flex flex-col min-h-[520px] shadow-2xl">
+            {/* Map Style Controls */}
+            <div className="absolute top-4 right-4 z-[500] flex gap-1 bg-gray-900/95 backdrop-blur border border-gray-700/80 rounded-xl p-1 shadow-xl text-xs">
+              <button
+                onClick={() => setMapType('google_streets')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
+                  mapType === 'google_streets' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                )}
               >
-                📲 Download TrackSphere APK (6.4 MB)
-              </a>
+                Google Map
+              </button>
+              <button
+                onClick={() => setMapType('google_hybrid')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
+                  mapType === 'google_hybrid' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                )}
+              >
+                Satellite + Places
+              </button>
+              <button
+                onClick={() => setMapType('osm')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer',
+                  mapType === 'osm' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                )}
+              >
+                OSM
+              </button>
             </div>
+
+            {/* Recenter on My Location Button */}
+            <button
+              onClick={handleCenterMap}
+              className="absolute bottom-6 right-4 z-[500] w-11 h-11 bg-gray-900/95 hover:bg-gray-800 border border-gray-700 rounded-2xl text-white flex items-center justify-center shadow-2xl transition-transform active:scale-95 cursor-pointer"
+              title="Center on my location"
+            >
+              <Crosshair className="w-5 h-5 text-indigo-400" />
+            </button>
+
+            {/* Floating Live Indicator Banner at Bottom Left */}
+            <div className="absolute bottom-6 left-4 z-[500] bg-gray-900/90 backdrop-blur border border-gray-700/80 rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-3 text-xs">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+              <div>
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <span>{userName || 'My Live Location'}</span>
+                  <span className="text-[10px] text-gray-400 font-mono">({deviceName})</span>
+                </p>
+                <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                  {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)} (±${Math.round(coords.accuracy)}m)` : 'Locating satellite...'}
+                </p>
+              </div>
+            </div>
+
+            {/* Leaflet Map Canvas */}
+            <div ref={mapContainerRef} className="w-full h-full min-h-[520px] flex-1" />
           </div>
         </div>
-
-        {/* 30-Minute Schedule Logging Banner */}
-        <div className="mb-5 p-3 bg-indigo-950/30 border border-indigo-900/40 rounded-xl flex items-center gap-2.5 text-xs text-indigo-300">
-          <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span>
-            30-Minute Schedule: Locations are logged to history every half hour so admins can track your full day journey at /locations.
-          </span>
-        </div>
-
-        {/* ─── MULTI-DEVICE SUPPORT: REGISTER ANOTHER DEVICE BUTTON ─── */}
-        <div className="pt-2 border-t border-gray-800 flex items-center justify-between">
-          <button
-            onClick={handleRegisterNewDevice}
-            className="w-full py-2.5 bg-gray-850 hover:bg-gray-800 border border-dashed border-gray-700 hover:border-indigo-500 text-gray-300 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
-            Register Another Device From Here
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
