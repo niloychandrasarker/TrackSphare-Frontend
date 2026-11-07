@@ -1,52 +1,90 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { writeAuditLog, getClientIp } from '@/lib/audit';
 import { unauthorized, forbidden, badRequest, serverError, created } from '@/lib/responses';
-import { LocationUploadSchema } from '@/validations/schemas';
+import { toValidUuid } from '@/lib/uuid';
 
-// POST /api/v1/locations
-export async function POST(req: NextRequest) {
+async function handleLocationUpload(req: NextRequest, isGet = false) {
   try {
     const auth = getAuthUser(req);
-    const body = await req.json();
+    const { searchParams } = new URL(req.url);
 
-    const deviceId = body?.deviceId || '9f2f6062-af23-48fa-abc3-cb2c42f9ec96';
-    const latitude = parseFloat(body?.latitude);
-    const longitude = parseFloat(body?.longitude);
-    const accuracy = body?.accuracy != null ? parseFloat(body?.accuracy) : 5.0;
-    const altitude = body?.altitude != null ? parseFloat(body?.altitude) : null;
-    const speed = body?.speed != null ? parseFloat(body?.speed) : null;
-    const batteryLevel = body?.batteryLevel != null ? Math.round(parseFloat(body?.batteryLevel)) : null;
-    const recordedAt = body?.recordedAt || new Date().toISOString();
+    let body: any = {};
+    if (!isGet) {
+      try {
+        body = await req.json();
+      } catch {
+        body = {};
+      }
+    }
+
+    const rawDevId = body?.deviceId || body?.id || searchParams.get('id') || searchParams.get('deviceId') || '377204';
+    const computedUuid = toValidUuid(String(rawDevId));
+
+    const rawLat = body?.latitude ?? body?.lat ?? searchParams.get('lat') ?? searchParams.get('latitude');
+    const rawLng = body?.longitude ?? body?.lon ?? body?.lng ?? searchParams.get('lon') ?? searchParams.get('lng') ?? searchParams.get('longitude');
+
+    if (rawLat === undefined || rawLng === undefined || rawLat === null || rawLng === null) {
+      return badRequest('Missing latitude or longitude');
+    }
+
+    const latitude = parseFloat(String(rawLat));
+    const longitude = parseFloat(String(rawLng));
 
     if (isNaN(latitude) || isNaN(longitude)) {
       return badRequest('Invalid latitude or longitude numbers');
     }
 
-    // Verify or register device
-    const deviceResult = await query<{
-      id: string; user_id: string; sharing_enabled: boolean;
-    }>(
-      `SELECT d.id, d.user_id, d.sharing_enabled
-       FROM devices d
-       WHERE d.id = $1 AND d.status = 'active'`,
-      [deviceId]
+    const rawAcc = body?.accuracy ?? searchParams.get('accuracy') ?? searchParams.get('hdop');
+    const accuracy = rawAcc != null ? parseFloat(String(rawAcc)) : 5.0;
+
+    const rawAlt = body?.altitude ?? searchParams.get('altitude');
+    const altitude = rawAlt != null ? parseFloat(String(rawAlt)) : null;
+
+    const rawSpeed = body?.speed ?? searchParams.get('speed');
+    const speed = rawSpeed != null ? parseFloat(String(rawSpeed)) : null;
+
+    const rawBatt = body?.batteryLevel ?? searchParams.get('batt') ?? searchParams.get('battery');
+    const batteryLevel = rawBatt != null ? Math.round(parseFloat(String(rawBatt))) : null;
+
+    let recordedAt = body?.recordedAt;
+    if (!recordedAt && searchParams.get('timestamp')) {
+      const ts = Number(searchParams.get('timestamp'));
+      recordedAt = ts > 10000000000 ? new Date(ts).toISOString() : new Date(ts * 1000).toISOString();
+    }
+    if (!recordedAt) {
+      recordedAt = new Date().toISOString();
+    }
+
+    // Check device by UUID or matching name/model
+    const dev = await query<{ id: string; user_id: string; sharing_enabled: boolean; status: string; name: string }>(
+      `SELECT id, user_id, sharing_enabled, status, name 
+       FROM devices 
+       WHERE id = $1 OR name ILIKE $2 OR model ILIKE $2 
+       LIMIT 1`,
+      [computedUuid, String(rawDevId)]
     );
 
+    let deviceId = dev.rows[0]?.id || computedUuid;
     let targetUserId = auth?.sub;
-    if (!deviceResult.rows[0]) {
+
+    if (!dev.rows[0]) {
       const adminRes = await query<{ id: string }>('SELECT id FROM users WHERE role = $1 ORDER BY created_at ASC LIMIT 1', ['super_admin']);
       targetUserId = targetUserId || adminRes.rows[0]?.id;
 
       await query(
-        `INSERT INTO devices (id, user_id, name, model, status, sharing_enabled, last_seen_at, battery_level)
-         VALUES ($1, $2, 'Android Mobile Phone', 'honor', 'active', TRUE, NOW(), $3)
-         ON CONFLICT (id) DO UPDATE SET status = 'active', sharing_enabled = TRUE, last_seen_at = NOW(), battery_level = COALESCE($3, devices.battery_level)`,
-        [deviceId, targetUserId, batteryLevel]
+        `INSERT INTO devices (id, user_id, name, model, user_name, status, sharing_enabled, last_seen_at, battery_level)
+         VALUES ($1, $2, $3, 'Android GPS Client', $4, 'active', TRUE, NOW(), $5)
+         ON CONFLICT (id) DO UPDATE SET 
+            status = 'active', 
+            sharing_enabled = TRUE, 
+            last_seen_at = NOW(), 
+            battery_level = COALESCE($5, devices.battery_level)`,
+        [deviceId, targetUserId, `Device (${rawDevId})`, `Device ${rawDevId}`, batteryLevel]
       );
     } else {
-      if (auth && !['super_admin', 'org_admin'].includes(auth.role) && deviceResult.rows[0].user_id !== auth.sub) {
+      deviceId = dev.rows[0].id;
+      if (auth && !['super_admin', 'org_admin'].includes(auth.role) && dev.rows[0].user_id !== auth.sub) {
         return forbidden('You do not own this device');
       }
 
@@ -68,9 +106,28 @@ export async function POST(req: NextRequest) {
       [deviceId, latitude, longitude, accuracy, altitude, speed, recordedAt]
     );
 
-    return created({ locationId: result.rows[0].id, deviceId, latitude, longitude, recordedAt });
+    return NextResponse.json({
+      success: true,
+      data: {
+        locationId: result.rows[0].id,
+        deviceId,
+        latitude,
+        longitude,
+        recordedAt
+      }
+    }, { status: 200 });
   } catch (err) {
-    console.error('POST /locations error:', err);
+    console.error('Location upload error:', err);
     return serverError();
   }
+}
+
+// GET /api/v1/locations (OsmAnd / Traccar GPS protocol)
+export async function GET(req: NextRequest) {
+  return handleLocationUpload(req, true);
+}
+
+// POST /api/v1/locations (TrackSphere JSON protocol)
+export async function POST(req: NextRequest) {
+  return handleLocationUpload(req, false);
 }

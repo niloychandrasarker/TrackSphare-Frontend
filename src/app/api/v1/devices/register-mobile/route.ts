@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { toValidUuid } from '@/lib/uuid';
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
 
     const devName = name || 'Mobile Android Device';
     const devModel = model || 'honor';
+    const validDeviceId = toValidUuid(deviceId);
 
     let result;
     if (deviceId) {
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
              image_url = COALESCE(EXCLUDED.image_url, devices.image_url),
              user_name = COALESCE(EXCLUDED.user_name, devices.user_name)
          RETURNING id, name, model, sharing_enabled, status, image_url, user_name`,
-        [deviceId, targetUserId, devName, devModel, androidVersion || null, appVersion || null, batteryLevel || null, imageUrl || null, userName || null]
+        [validDeviceId, targetUserId, devName, devModel, androidVersion || null, appVersion || null, batteryLevel || null, imageUrl || null, userName || null]
       );
     } else {
       result = await query<{ id: string; name: string; model: string; sharing_enabled: boolean; status: string; image_url: string; user_name: string }>(
