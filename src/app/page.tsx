@@ -71,21 +71,20 @@ export default function LandingPage() {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Smartphone className="w-5 h-5" />
-            Launch & Install Mobile Tracker
+            Launch &amp; Install TrackSphere App
           </Link>
 
-          <a
-            href="/downloads/TrackSphere-release.apk"
-            download="TrackSphere-v1.2.0.apk"
+          <Link
+            href="/tracking"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-6 py-4 bg-indigo-600/30 hover:bg-indigo-600/40 border border-indigo-500/50 text-indigo-200 font-semibold rounded-2xl transition-all"
           >
-            <Download className="w-5 h-5 text-indigo-400" />
-            Download APK File
-          </a>
+            <Radio className="w-5 h-5 text-indigo-400" />
+            Live Fleet Tracking Map
+          </Link>
         </div>
 
         <p className="mt-4 text-xs text-gray-500">
-          Compatible with Android 10+ (API 29+) • Private Signed APK • Direct Install
+          Compatible with all Android, iOS &amp; Web Devices • 100% TrackSphere Engine • Installable on Home Screen
         </p>
 
         {/* Core Privacy Pillar Banner */}

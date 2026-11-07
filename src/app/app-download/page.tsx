@@ -2,155 +2,116 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Smartphone, Download, CheckCircle, ShieldCheck, QrCode,
-  Globe, Radio, ArrowRight, CheckCircle2, Shield
+  Smartphone, Download, CheckCircle, ShieldCheck,
+  Globe, Radio, ArrowRight, CheckCircle2, Shield, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AppDownloadPage() {
-  const [serverIp, setServerIp] = useState('192.168.110.177');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const host = window.location.hostname;
-      if (host && host !== 'localhost') {
-        setServerIp(host);
-      }
-    }
-  }, []);
-
-  const backendEndpoint = process.env.NEXT_PUBLIC_BACKEND_URL || (serverIp ? `http://${serverIp}:5000/api/v1` : 'https://trachsphare-backend.vercel.app/api/v1');
+  const backendEndpoint = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://trachsphare-backend.vercel.app/api/v1';
   const serverUrl = `${backendEndpoint.replace(/\/+$/, '')}/locations`;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6 sm:p-12">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-gray-950 text-gray-100 p-6 sm:p-12 font-sans">
+      <div className="max-w-3xl mx-auto space-y-8">
         {/* Header */}
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-indigo-600/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-indigo-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-600/30">
             <Smartphone className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-white">TrackSphere Android Mobile Client</h1>
+          <h1 className="text-3xl font-black text-white tracking-tight">TrackSphere Mobile App</h1>
           <p className="text-gray-400 text-sm mt-2 max-w-lg mx-auto">
-            Install the mobile agent on your Android phone to enable consent-controlled live GPS location sharing.
+            Install the official TrackSphere App on your Android phone to track your location in real time with interactive maps and satellite views.
           </p>
         </div>
 
-        {/* 2 Ways to Install */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {/* Method 1: Instant Web App (PWA) */}
-          <div className="bg-gradient-to-br from-indigo-950/60 to-gray-900 border border-indigo-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <div>
-              <span className="px-3 py-1 bg-indigo-900/60 text-indigo-300 border border-indigo-700/60 rounded-full text-[11px] font-semibold uppercase tracking-wider">
-                Recommended & Instant
-              </span>
-              <h3 className="text-lg font-bold text-white mt-3">Option 1: Install Web App</h3>
-              <p className="text-xs text-gray-300 mt-1.5 leading-relaxed">
-                Open in your mobile browser, tap <strong>&quot;Install App&quot;</strong>. Installs immediately with an icon on your phone without APK parse issues.
-              </p>
-            </div>
+        {/* ─── PRIMARY METHOD: OFFICIAL TRACKSPHERE APP (WITH FULL WEB UI) ─── */}
+        <div className="bg-gradient-to-br from-indigo-950/80 via-gray-900 to-indigo-900/40 border-2 border-indigo-500 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow">
+              <Sparkles className="w-3.5 h-3.5" /> Official App (Full Web UI)
+            </span>
+            <span className="text-xs text-indigo-300 font-mono">100% TrackSphere</span>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-black text-white">
+            Install TrackSphere App Directly on Your Phone
+          </h2>
+          <p className="text-sm text-gray-300 mt-2 leading-relaxed">
+            This installs the complete TrackSphere application directly onto your Android phone&apos;s home screen.
+            It features the <strong>exact same modern UI as the web</strong>:
+          </p>
+
+          <ul className="mt-4 space-y-2 text-xs sm:text-sm text-gray-300">
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Full Interactive Live Map with Google Streets, Satellite &amp; OSM layers</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Pulsating live marker showing your exact real-time coordinates</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Screen WakeLock and Background stream to keep pinging every 3.5 seconds</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Direct access to Day Location History &amp; Printable Schedule Chart</span>
+            </li>
+          </ul>
+
+          <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
             <Link
               href="/app"
-              className="mt-6 flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-2xl text-xs shadow-lg shadow-indigo-600/30 transition-all"
+              className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl text-sm shadow-xl shadow-indigo-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <Globe className="w-4 h-4" />
-              Launch &amp; Install Web Tracker (/app)
+              Open &amp; Install TrackSphere App (/app)
             </Link>
           </div>
 
-          {/* Method 2: Physical Android APK */}
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <div>
-              <span className="px-3 py-1 bg-emerald-950 text-emerald-400 border border-emerald-800/80 rounded-full text-[11px] font-semibold uppercase tracking-wider">
-                Official Binary APK (6.45 MB)
-              </span>
-              <h3 className="text-lg font-bold text-white mt-3">Option 2: Download APK File</h3>
-              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                Download the signed compiled Android APK. Install on Android 7 to 15 with zero parse errors.
-              </p>
-            </div>
-            <a
-              href="/downloads/TrackSphere-release.apk"
-              download="TrackSphere-release.apk"
-              className="mt-6 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-2xl text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              Download APK (6.45 MB)
-            </a>
-          </div>
+          <p className="mt-3 text-xs text-gray-400">
+            💡 On Android Chrome: Open <code className="text-indigo-400 font-mono">/app</code> &gt; Tap <strong>&quot;Install on Phone&quot;</strong> or browser menu (⋮) &gt; <strong>&quot;Install app&quot;</strong>.
+          </p>
         </div>
 
-        {/* APK Setup Guide */}
-        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-8 mb-8 shadow-2xl relative overflow-hidden">
-          <div className="border-b border-gray-800 pb-5 mb-6">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Radio className="w-5 h-5 text-indigo-400" />
-              Android APK Configuration Guide
-            </h2>
-            <p className="text-xs text-gray-400 mt-1">
-              After installing the APK on your Android phone, enter these quick settings inside the app:
+        {/* ─── OPTIONAL BACKGROUND ENGINE: TRACCAR CLIENT COMPATIBILITY ─── */}
+        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-xl">
+          <div className="border-b border-gray-800 pb-4 mb-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Radio className="w-4 h-4 text-indigo-400" />
+              About Traccar Client Background App (Alternative Engine)
+            </h3>
+            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+              If you downloaded the generic background APK (shown as <em>&quot;Traccar Client&quot;</em> in your screenshot), that is an open-source background GPS service daemon without a map interface. To link it to TrackSphere:
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 text-xs">
-            <div className="p-4 bg-gray-800/60 rounded-2xl border border-gray-700/60">
-              <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider block">Server URL</span>
-              <code className="text-sm font-mono text-indigo-300 block mt-1 break-all select-all font-bold">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
+            <div className="p-3.5 bg-gray-800/70 rounded-xl border border-gray-700/60">
+              <span className="text-[10px] text-gray-400 uppercase font-semibold block">Server URL to Enter</span>
+              <code className="text-xs font-mono text-indigo-300 block mt-1 break-all select-all font-bold">
                 {serverUrl}
               </code>
-              <span className="text-[10px] text-gray-500 mt-1 block">Paste this into the &quot;Server URL&quot; field in the app</span>
             </div>
-
-            <div className="p-4 bg-gray-800/60 rounded-2xl border border-gray-700/60">
-              <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider block">Device Identifier</span>
-              <code className="text-sm font-mono text-emerald-300 block mt-1 font-bold">
-                honor
+            <div className="p-3.5 bg-gray-800/70 rounded-xl border border-gray-700/60">
+              <span className="text-[10px] text-gray-400 uppercase font-semibold block">Device Identifier</span>
+              <code className="text-xs font-mono text-emerald-300 block mt-1 font-bold">
+                Realme c71 (or your device name)
               </code>
-              <span className="text-[10px] text-gray-500 mt-1 block">Or enter any device name (e.g. MyPhone)</span>
             </div>
           </div>
 
-          <div className="space-y-3">
-            {[
-              {
-                title: '1. Install APK on Phone',
-                desc: 'Download the APK file above, open it in Files or Downloads, and tap Install (Allow Unknown Sources if prompted).'
-              },
-              {
-                title: '2. Grant Android Location Permission',
-                desc: 'When opening the app, allow Location Access (&quot;While using the app&quot; or &quot;Always allow&quot; for high accuracy GPS).'
-              },
-              {
-                title: '3. Enter Server URL and Turn Status ON',
-                desc: `Set Server URL to ${serverUrl} and toggle Service Status to ON. The app will immediately start transmitting GPS fixes!`
-              },
-              {
-                title: '4. View Live on Admin Map',
-                desc: 'Open the TrackSphere Admin Dashboard at /tracking to see your phone streaming real-time coordinates live on the map.'
-              }
-            ].map((step, idx) => (
-              <div key={idx} className="flex items-start gap-3 p-3.5 bg-gray-800/30 rounded-2xl border border-gray-800">
-                <CheckCircle2 className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-white">{step.title}</h4>
-                  <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{step.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Privacy Guarantee */}
-          <div className="mt-6 p-4 bg-emerald-950/30 border border-emerald-900/60 rounded-2xl flex items-center gap-3">
-            <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-            <p className="text-xs text-emerald-300">
-              <strong>Consent Controlled:</strong> Location is only shared when you toggle Service Status to ON. You can stop sharing anytime with 1 tap.
-            </p>
-          </div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Once you paste the Server URL above and toggle <strong>Service status: ON</strong>, Traccar Client will transmit coordinates to TrackSphere.
+            <strong className="text-white"> However, for the official TrackSphere experience with the live map and full UI, please use Option 1 above (/app).</strong>
+          </p>
         </div>
 
-        <div className="text-center">
-          <Link href="/dashboard" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
-            ← Back to Web Dashboard
+        <div className="text-center pt-2">
+          <Link href="/tracking" className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+            ← Back to Live Fleet Tracking Map
           </Link>
         </div>
       </div>

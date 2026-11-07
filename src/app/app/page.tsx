@@ -962,23 +962,24 @@ export default function MobileAppPage() {
               )}
             </div>
 
-            {/* Android APK 24/7 Background Banner */}
-            <div className="bg-gradient-to-br from-emerald-950/40 via-gray-900 to-indigo-950/40 border border-emerald-800/60 rounded-2xl p-4 shadow-xl text-left">
+            {/* 📲 TrackSphere Official Mobile App Install Card */}
+            <div className="bg-gradient-to-br from-indigo-950/60 via-gray-900 to-emerald-950/40 border border-indigo-700/60 rounded-2xl p-4 shadow-xl text-left">
               <div className="flex items-start gap-3">
-                <Smartphone className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-md">
+                  <Smartphone className="w-5 h-5 text-white" />
+                </div>
                 <div className="flex-1">
-                  <h4 className="text-xs font-bold text-white">24/7 Tracking With Browser Closed</h4>
-                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                    Want tracking to keep running in your pocket even when the browser is closed? Download our Android native APK.
+                  <h4 className="text-xs font-bold text-white">Install TrackSphere on Your Phone</h4>
+                  <p className="text-[11px] text-gray-300 mt-1 leading-relaxed">
+                    Install this exact TrackSphere dashboard as a native app on your phone home screen with live map &amp; background GPS.
                   </p>
-                  <a
-                    href="/downloads/TrackSphere-release.apk"
-                    download="TrackSphere-release.apk"
-                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
+                  <button
+                    onClick={handleInstallClick}
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all cursor-pointer active:scale-95"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download APK (6.45 MB)
-                  </a>
+                    Install TrackSphere App
+                  </button>
                 </div>
               </div>
             </div>

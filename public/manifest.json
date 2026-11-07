@@ -1,8 +1,10 @@
 {
-  "name": "TrackSphere Location Agent",
+  "name": "TrackSphere",
   "short_name": "TrackSphere",
-  "description": "Consent-Based Real-Time Location Sharing Agent",
+  "description": "Real-Time Fleet & Device Location Tracker",
+  "id": "/app",
   "start_url": "/app",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#030712",
