@@ -41,10 +41,10 @@ export const LocationUploadSchema = z.object({
 });
 
 export const LocationHistoryQuerySchema = z.object({
-  deviceId: z.string().uuid(),
-  from:     z.string().datetime({ offset: true }).optional(),
-  to:       z.string().datetime({ offset: true }).optional(),
-  limit:    z.coerce.number().int().min(1).max(500).optional().default(100),
+  deviceId: z.string().min(1),
+  from:     z.string().optional(),
+  to:       z.string().optional(),
+  limit:    z.coerce.number().int().min(1).max(2000).optional().default(500),
   offset:   z.coerce.number().int().min(0).optional().default(0),
 });
 

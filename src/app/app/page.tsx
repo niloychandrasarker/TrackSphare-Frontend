@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Smartphone, MapPin, Radio, WifiOff, Battery, ShieldCheck,
   CheckCircle2, AlertCircle, RefreshCw, ArrowLeft, Activity,
-  Lock, Camera, User, Edit3, PlusCircle
+  Lock, Camera, User, Edit3, PlusCircle, Clock
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -646,7 +646,14 @@ export default function MobileAppPage() {
         </div>
 
         {/* ─── LIVE GPS TELEMETRY ─── */}
-        <div className="bg-gray-800/30 border border-gray-800 rounded-2xl p-4 space-y-2 mb-5 text-xs">
+        <div className="bg-gray-800/30 border border-gray-800 rounded-2xl p-4 space-y-2 mb-4 text-xs">
+          <div className="flex items-center justify-between text-gray-400">
+            <span>Schedule Logging:</span>
+            <span className="text-emerald-400 font-semibold flex items-center gap-1 font-mono text-[11px]">
+              <Clock className="w-3.5 h-3.5" /> Every 30 Mins Active
+            </span>
+          </div>
+
           <div className="flex items-center justify-between text-gray-400">
             <span>Status:</span>
             <span className="font-medium text-white truncate max-w-[230px]">{syncStatus}</span>
@@ -667,8 +674,8 @@ export default function MobileAppPage() {
           </div>
 
           <div className="flex items-center justify-between text-gray-400">
-            <span>Sync Count:</span>
-            <span className="text-emerald-400 font-mono font-bold">{syncCount} updates sent</span>
+            <span>Checkpoints Saved:</span>
+            <span className="text-emerald-400 font-mono font-bold">{syncCount} fixes logged</span>
           </div>
 
           {lastSyncTime && (
@@ -677,6 +684,14 @@ export default function MobileAppPage() {
               <span className="text-gray-300 font-mono">{lastSyncTime}</span>
             </div>
           )}
+        </div>
+
+        {/* 30-Minute Schedule Logging Banner */}
+        <div className="mb-5 p-3 bg-indigo-950/30 border border-indigo-900/40 rounded-xl flex items-center gap-2.5 text-xs text-indigo-300">
+          <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>
+            30-Minute Schedule: Locations are logged to history every half hour so admins can track your full day journey at /locations.
+          </span>
         </div>
 
         {/* ─── MULTI-DEVICE SUPPORT: REGISTER ANOTHER DEVICE BUTTON ─── */}
