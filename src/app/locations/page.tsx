@@ -4,9 +4,9 @@ import { useEffect, useState, useRef } from 'react';
 import {
   MapPin, Search, Calendar, Clock, Navigation, Play, Pause,
   RotateCcw, ArrowRight, User, Smartphone, AlertCircle, RefreshCw,
-  CheckCircle2, Layers, Compass, ChevronRight
+  CheckCircle2, Layers, Compass, ChevronRight, Printer, FileText,
+  ExternalLink, Download, Share2
 } from 'lucide-react';
-import { Device } from '@/types';
 import clsx from 'clsx';
 
 interface LocationRecord {
@@ -74,6 +74,11 @@ export default function LocationHistoryPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
 
+  // Reverse Geocoded Place Names Cache (key: "lat,lng" -> address string)
+  const [placeNames, setPlaceNames] = useState<Record<string, string>>({});
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const resolvedKeysRef = useRef<Set<string>>(new Set());
+
   // Map state
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -87,9 +92,9 @@ export default function LocationHistoryPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const playbackTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const playbackMarkerRef = useRef<any>(null);
 
   function getToken() {
+    if (typeof window === 'undefined') return '';
     return localStorage.getItem('adminToken') || localStorage.getItem('accessToken') || '';
   }
 
@@ -168,7 +173,7 @@ export default function LocationHistoryPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  // Trigger search when device or times change
+  // Trigger search when device changes
   useEffect(() => {
     if (selectedDeviceId && fromTime && toTime) {
       fetchHistory();
@@ -235,6 +240,69 @@ export default function LocationHistoryPage() {
     setPlaybackIndex(0);
     setIsPlaying(false);
   }, [filterMode]);
+
+  // Reverse Geocoding Effect: Resolves place names for all displayed points
+  useEffect(() => {
+    if (displayedLocations.length === 0) return;
+
+    // Collect keys needing resolution
+    const needed: { lat: number; lng: number; key: string }[] = [];
+    displayedLocations.forEach(p => {
+      const key = `${Number(p.latitude).toFixed(4)},${Number(p.longitude).toFixed(4)}`;
+      if (!resolvedKeysRef.current.has(key) && !placeNames[key]) {
+        needed.push({ lat: Number(p.latitude), lng: Number(p.longitude), key });
+      }
+    });
+
+    if (needed.length === 0) return;
+
+    setLoadingPlaces(true);
+    let isCancelled = false;
+
+    // Process resolutions in small batches
+    async function resolveAll() {
+      for (const item of needed) {
+        if (isCancelled) break;
+        if (resolvedKeysRef.current.has(item.key)) continue;
+
+        try {
+          const res = await fetch(`/api/v1/locations/geocode?lat=${item.lat}&lng=${item.lng}`);
+          const data = await res.json();
+          if (data.success && data.data?.placeName) {
+            resolvedKeysRef.current.add(item.key);
+            setPlaceNames(prev => ({
+              ...prev,
+              [item.key]: data.data.placeName,
+            }));
+          }
+        } catch (e) {
+          // Fallback if network blocked
+          try {
+            const bdc = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${item.lat}&longitude=${item.lng}&localityLanguage=en`);
+            const bdcData = await bdc.json();
+            const place = [bdcData.locality, bdcData.city, bdcData.principalSubdivision].filter(Boolean).join(', ');
+            resolvedKeysRef.current.add(item.key);
+            setPlaceNames(prev => ({ ...prev, [item.key]: place || `Location (${item.lat.toFixed(4)}, ${item.lng.toFixed(4)})` }));
+          } catch {
+            resolvedKeysRef.current.add(item.key);
+          }
+        }
+      }
+      if (!isCancelled) setLoadingPlaces(false);
+    }
+
+    resolveAll();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [displayedLocations]);
+
+  // Helper to get resolved place name
+  function getPlaceName(lat: number, lng: number): string {
+    const key = `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
+    return placeNames[key] || 'Resolving place name...';
+  }
 
   // Tile URL configuration (Google Maps / Hybrid / OSM)
   function getTileConfig(type: 'google_streets' | 'google_hybrid' | 'osm') {
@@ -310,8 +378,8 @@ export default function LocationHistoryPage() {
     const latLngs: [number, number][] = displayedLocations.map(p => [Number(p.latitude), Number(p.longitude)]);
     const bounds = L.latLngBounds(latLngs);
 
-    // 1. Draw Journey Polyline with Arrow Direction
-    const polyline = L.polyline(latLngs, {
+    // 1. Draw Journey Polyline
+    L.polyline(latLngs, {
       color: '#4f46e5',
       weight: 4.5,
       opacity: 0.85,
@@ -331,6 +399,7 @@ export default function LocationHistoryPage() {
       const isStart = idx === 0;
       const isEnd = idx === displayedLocations.length - 1;
       const timeStr = new Date(p.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const place = getPlaceName(Number(p.latitude), Number(p.longitude));
 
       let iconHtml = '';
       let iconSize: [number, number] = [32, 32];
@@ -372,7 +441,7 @@ export default function LocationHistoryPage() {
       const marker = L.marker([Number(p.latitude), Number(p.longitude)], { icon: customIcon }).addTo(markersLayer);
 
       const popupContent = `
-        <div style="font-family: sans-serif; padding: 4px; min-width: 170px; color: #0f172a;">
+        <div style="font-family: sans-serif; padding: 4px; min-width: 190px; color: #0f172a;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
             <span style="font-weight: 800; font-size: 13px; color: ${isStart ? '#059669' : isEnd ? '#dc2626' : '#4f46e5'};">
               ${isStart ? '🚩 Journey Start' : isEnd ? '🏁 Final Stop' : `⏱️ Stop #${idx + 1}`}
@@ -381,9 +450,11 @@ export default function LocationHistoryPage() {
               ${timeStr}
             </span>
           </div>
+          <div style="font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 4px; line-height: 1.3;">
+            📍 ${place}
+          </div>
           <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Date: ${new Date(p.recorded_at).toLocaleDateString()}</div>
-          <div style="font-size: 12px; margin-bottom: 2px;"><strong>Lat:</strong> ${Number(p.latitude).toFixed(5)}</div>
-          <div style="font-size: 12px; margin-bottom: 4px;"><strong>Lng:</strong> ${Number(p.longitude).toFixed(5)}</div>
+          <div style="font-size: 11px; margin-bottom: 2px; color: #475569;"><strong>Lat:</strong> ${Number(p.latitude).toFixed(5)} • <strong>Lng:</strong> ${Number(p.longitude).toFixed(5)}</div>
           <div style="font-size: 11px; color: #64748b;">Accuracy: ±${p.accuracy ? Math.round(Number(p.accuracy)) + 'm' : 'GPS'}</div>
         </div>
       `;
@@ -393,9 +464,9 @@ export default function LocationHistoryPage() {
     });
 
     map.fitBounds(bounds, { padding: [50, 50] });
-  }, [displayedLocations]);
+  }, [displayedLocations, placeNames]);
 
-  // Focus map when user clicks a timeline point
+  // Focus map when user clicks a timeline point or table row
   function handleFocusPoint(p: LocationRecord) {
     setSelectedPoint(p);
     const map = mapInstanceRef.current;
@@ -447,46 +518,117 @@ export default function LocationHistoryPage() {
 
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
 
+  // Trigger Print Dialog
+  function handlePrint() {
+    window.print();
+  }
+
   return (
     <div className="space-y-6">
-      {/* Page Title */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Print-Only Stylesheet */}
+      <style jsx global>{`
+        @media print {
+          /* Hide non-printable UI chrome */
+          nav, aside, header, .no-print, button, input, select, .leaflet-control-container {
+            display: none !important;
+          }
+          body, main, #__next, .print-container {
+            background: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
+          .printable-report {
+            display: block !important;
+            color: #0f172a !important;
+            background: #ffffff !important;
+            font-size: 11pt !important;
+          }
+          .printable-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-top: 15px !important;
+          }
+          .printable-table th {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+            border: 1px solid #cbd5e1 !important;
+            padding: 8px 10px !important;
+            font-size: 10pt !important;
+            font-weight: bold !important;
+            text-align: left !important;
+          }
+          .printable-table td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 8px 10px !important;
+            font-size: 9.5pt !important;
+            color: #1e293b !important;
+            page-break-inside: avoid !important;
+          }
+          .print-badge {
+            display: inline-block !important;
+            padding: 2px 6px !important;
+            border-radius: 4px !important;
+            font-size: 8pt !important;
+            font-weight: bold !important;
+            border: 1px solid #94a3b8 !important;
+          }
+        }
+      `}</style>
+
+      {/* Screen Header (Hidden on Print) */}
+      <div className="no-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Clock className="w-6 h-6 text-indigo-400" />
             Location Schedule &amp; Day Journey History
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Track where any user traveled throughout the day with 30-minute checkpoints and route playback.
+            Track where any user traveled throughout the day with exact place names, 30-minute schedule chart, and printable reports.
           </p>
         </div>
 
-        {/* Quick Filter Mode Toggle */}
-        <div className="flex items-center gap-1.5 p-1 bg-gray-900 border border-gray-800 rounded-xl text-xs">
+        {/* Action Buttons: Filter Mode + Print Report */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Filter Mode Toggle */}
+          <div className="flex items-center gap-1.5 p-1 bg-gray-900 border border-gray-800 rounded-xl text-xs">
+            <button
+              onClick={() => setFilterMode('30min')}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5',
+                filterMode === '30min' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
+              )}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Every 30 Mins (Half-Hour Stops)
+            </button>
+            <button
+              onClick={() => setFilterMode('all')}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5',
+                filterMode === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
+              )}
+            >
+              All GPS Points ({totalRecords})
+            </button>
+          </div>
+
+          {/* 🖨️ Print Location Report Button */}
           <button
-            onClick={() => setFilterMode('30min')}
-            className={clsx(
-              'px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5',
-              filterMode === '30min' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
-            )}
+            onClick={handlePrint}
+            disabled={displayedLocations.length === 0}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
+            title="Print or Save as PDF"
           >
-            <Clock className="w-3.5 h-3.5" />
-            Every 30 Mins (Half-Hour Stops)
-          </button>
-          <button
-            onClick={() => setFilterMode('all')}
-            className={clsx(
-              'px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5',
-              filterMode === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
-            )}
-          >
-            All GPS Points ({totalRecords})
+            <Printer className="w-4 h-4" />
+            Print Schedule Report (PDF)
           </button>
         </div>
       </div>
 
-      {/* Control Panel: Device Selector & Time Schedule */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl">
+      {/* Control Panel: Device Selector & Time Schedule (Hidden on Print) */}
+      <div className="no-print bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
           {/* Device Selector */}
           <div className="md:col-span-4">
@@ -573,9 +715,9 @@ export default function LocationHistoryPage() {
         </div>
       </div>
 
-      {/* Summary Stat Cards */}
+      {/* Summary Stat Cards (Hidden on Print) */}
       {displayedLocations.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="no-print grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
             <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
               Checkpoints / Stops
@@ -602,10 +744,10 @@ export default function LocationHistoryPage() {
 
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
             <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-              Journey Start
+              Journey Start Location
             </span>
-            <p className="text-lg font-bold text-white truncate">
-              {new Date(displayedLocations[0].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <p className="text-xs font-bold text-white truncate">
+              {new Date(displayedLocations[0].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {getPlaceName(Number(displayedLocations[0].latitude), Number(displayedLocations[0].longitude))}
             </p>
             <p className="text-[10px] text-emerald-400 mt-0.5 font-mono">
               {Number(displayedLocations[0].latitude).toFixed(4)}, {Number(displayedLocations[0].longitude).toFixed(4)}
@@ -614,10 +756,10 @@ export default function LocationHistoryPage() {
 
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
             <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-              Final / Latest Stop
+              Final / Latest Location
             </span>
-            <p className="text-lg font-bold text-white truncate">
-              {new Date(displayedLocations[displayedLocations.length - 1].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <p className="text-xs font-bold text-white truncate">
+              {new Date(displayedLocations[displayedLocations.length - 1].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {getPlaceName(Number(displayedLocations[displayedLocations.length - 1].latitude), Number(displayedLocations[displayedLocations.length - 1].longitude))}
             </p>
             <p className="text-[10px] text-rose-400 mt-0.5 font-mono">
               {Number(displayedLocations[displayedLocations.length - 1].latitude).toFixed(4)}, {Number(displayedLocations[displayedLocations.length - 1].longitude).toFixed(4)}
@@ -626,10 +768,10 @@ export default function LocationHistoryPage() {
         </div>
       )}
 
-      {/* Main Content: Map & Side Timeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
+      {/* Main Interactive Map & Side Timeline (Hidden on Print) */}
+      <div className="no-print grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
         {/* Interactive Map Area (8 cols) */}
-        <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden relative flex flex-col min-h-[520px]">
+        <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden relative flex flex-col min-h-[500px]">
           {/* Map Controls */}
           <div className="absolute top-4 right-4 z-[500] flex gap-1 bg-gray-900/95 backdrop-blur border border-gray-700 rounded-xl p-1 shadow-xl text-xs">
             <button
@@ -661,7 +803,7 @@ export default function LocationHistoryPage() {
             </button>
           </div>
 
-          {/* Route Playback Toolbar at bottom */}
+          {/* Route Playback Toolbar */}
           {displayedLocations.length > 1 && (
             <div className="absolute bottom-4 left-4 right-4 z-[500] bg-gray-900/95 backdrop-blur border border-gray-700/80 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -676,7 +818,7 @@ export default function LocationHistoryPage() {
                     {isPlaying ? 'Playing Journey...' : 'Play Route Timeline'}
                   </p>
                   <p className="text-[10px] text-gray-400">
-                    Step {playbackIndex + 1} of {displayedLocations.length} • {new Date(displayedLocations[playbackIndex]?.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    Step {playbackIndex + 1} of {displayedLocations.length} • {new Date(displayedLocations[playbackIndex]?.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {getPlaceName(Number(displayedLocations[playbackIndex]?.latitude), Number(displayedLocations[playbackIndex]?.longitude))}
                   </p>
                 </div>
               </div>
@@ -710,7 +852,7 @@ export default function LocationHistoryPage() {
           )}
 
           {/* Map canvas */}
-          <div ref={mapContainerRef} className="w-full h-full min-h-[520px] flex-1" />
+          <div ref={mapContainerRef} className="w-full h-full min-h-[500px] flex-1" />
 
           {/* Empty state if no locations */}
           {!loadingHistory && displayedLocations.length === 0 && (
@@ -730,8 +872,8 @@ export default function LocationHistoryPage() {
           )}
         </div>
 
-        {/* Side Timeline Panel (Where was he all day long) (4 cols) */}
-        <div className="lg:col-span-4 bg-gray-900 border border-gray-800 rounded-2xl flex flex-col h-[580px] overflow-hidden">
+        {/* Side Timeline Panel (4 cols) */}
+        <div className="lg:col-span-4 bg-gray-900 border border-gray-800 rounded-2xl flex flex-col h-[520px] overflow-hidden">
           {/* Header */}
           <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-gray-900">
             <div>
@@ -766,14 +908,13 @@ export default function LocationHistoryPage() {
                 const isEnd = idx === displayedLocations.length - 1;
                 const isSelected = selectedPoint?.id === p.id;
                 const timeStr = new Date(p.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const place = getPlaceName(Number(p.latitude), Number(p.longitude));
 
                 return (
                   <div
                     key={p.id || idx}
                     onClick={() => handleFocusPoint(p)}
-                    className={clsx(
-                      'relative pl-7 cursor-pointer transition-all group',
-                    )}
+                    className={clsx('relative pl-7 cursor-pointer transition-all group')}
                   >
                     {/* Connecting line */}
                     {idx < displayedLocations.length - 1 && (
@@ -815,6 +956,11 @@ export default function LocationHistoryPage() {
                         </span>
                       </div>
 
+                      {/* Resolved Place Name */}
+                      <p className="text-xs font-semibold text-gray-200 line-clamp-2 my-1">
+                        📍 {place}
+                      </p>
+
                       <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono">
                         <span>Lat: {Number(p.latitude).toFixed(4)}</span>
                         <span>Lng: {Number(p.longitude).toFixed(4)}</span>
@@ -831,6 +977,276 @@ export default function LocationHistoryPage() {
                 );
               })
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* 📊 COMPREHENSIVE LOCATION SCHEDULE CHART & TABLE */}
+      {displayedLocations.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl space-y-5">
+          {/* Chart Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                Location History Schedule Chart (সময় ও জায়গার তালিকা)
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">
+                Chronological record of where {selectedDevice?.user_name || 'the user'} was located throughout the selected period.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">
+                {displayedLocations.length} checkpoints recorded
+              </span>
+              <button
+                onClick={handlePrint}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print / Download PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Visual Timeline Distribution Bar */}
+          <div className="p-4 bg-gray-950/70 border border-gray-800/80 rounded-xl space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-400">
+              <span className="font-semibold text-gray-300">Daily Journey Timeline Progression</span>
+              <span className="font-mono text-indigo-400">
+                {new Date(displayedLocations[0].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {' → '}
+                {new Date(displayedLocations[displayedLocations.length - 1].recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+
+            {/* Checkpoint Dots Bar */}
+            <div className="relative h-3 bg-gray-800 rounded-full overflow-hidden flex items-center px-1">
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-indigo-500 to-rose-500 opacity-80" />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1">
+              <span>🚩 Start: {getPlaceName(Number(displayedLocations[0].latitude), Number(displayedLocations[0].longitude))}</span>
+              <span>🏁 Latest: {getPlaceName(Number(displayedLocations[displayedLocations.length - 1].latitude), Number(displayedLocations[displayedLocations.length - 1].longitude))}</span>
+            </div>
+          </div>
+
+          {/* Location Records Table */}
+          <div className="overflow-x-auto rounded-xl border border-gray-800">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-800/80 text-gray-300 text-xs uppercase tracking-wider border-b border-gray-700">
+                  <th className="py-3 px-4 font-semibold">Stop #</th>
+                  <th className="py-3 px-4 font-semibold">Time &amp; Date</th>
+                  <th className="py-3 px-4 font-semibold">Place Name / Address (জায়গার নাম)</th>
+                  <th className="py-3 px-4 font-semibold">Coordinates</th>
+                  <th className="py-3 px-4 font-semibold">Accuracy</th>
+                  <th className="py-3 px-4 font-semibold text-right no-print">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800 text-sm">
+                {displayedLocations.map((p, idx) => {
+                  const isStart = idx === 0;
+                  const isEnd = idx === displayedLocations.length - 1;
+                  const isSelected = selectedPoint?.id === p.id;
+                  const recordedDate = new Date(p.recorded_at);
+                  const timeFormatted = recordedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                  const dateFormatted = recordedDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                  const place = getPlaceName(Number(p.latitude), Number(p.longitude));
+
+                  // Calculate interval from previous stop
+                  let intervalStr = '';
+                  if (idx > 0) {
+                    const diffMs = recordedDate.getTime() - new Date(displayedLocations[idx - 1].recorded_at).getTime();
+                    const diffMins = Math.round(diffMs / (60 * 1000));
+                    if (diffMins >= 60) {
+                      const hrs = Math.floor(diffMins / 60);
+                      const remMins = diffMins % 60;
+                      intervalStr = `+${hrs}h ${remMins}m`;
+                    } else {
+                      intervalStr = `+${diffMins}m`;
+                    }
+                  }
+
+                  return (
+                    <tr
+                      key={p.id || idx}
+                      onClick={() => handleFocusPoint(p)}
+                      className={clsx(
+                        'transition-colors cursor-pointer',
+                        isSelected ? 'bg-indigo-950/60' : 'hover:bg-gray-800/50',
+                        isStart && 'bg-emerald-950/20',
+                        isEnd && 'bg-rose-950/20'
+                      )}
+                    >
+                      {/* Stop Number Badge */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {isStart ? (
+                          <span className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                            🚩 START
+                          </span>
+                        ) : isEnd ? (
+                          <span className="px-2 py-1 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                            🏁 FINAL
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-md text-[11px] font-bold bg-gray-800 text-indigo-300 border border-gray-700">
+                            Stop #{idx + 1}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Time & Date */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                          {timeFormatted}
+                        </div>
+                        <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
+                          <span>{dateFormatted}</span>
+                          {intervalStr && (
+                            <span className="px-1.5 py-0.2 rounded bg-gray-800 text-[10px] text-gray-400 font-mono">
+                              {intervalStr}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Place Name (Reverse Geocoded) */}
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-white flex items-start gap-1.5">
+                          <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-100">{place}</p>
+                            <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                              {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Coordinates */}
+                      <td className="py-3 px-4 whitespace-nowrap font-mono text-xs text-gray-300">
+                        <div>Lat: {Number(p.latitude).toFixed(5)}</div>
+                        <div className="text-gray-400">Lng: {Number(p.longitude).toFixed(5)}</div>
+                      </td>
+
+                      {/* Accuracy */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="text-xs text-gray-300 font-mono">
+                          ±{p.accuracy ? Math.round(Number(p.accuracy)) + 'm' : 'GPS'}
+                        </span>
+                      </td>
+
+                      {/* Action */}
+                      <td className="py-3 px-4 whitespace-nowrap text-right no-print">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFocusPoint(p);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-indigo-600 text-gray-300 hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1"
+                        >
+                          Focus <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 🖨️ PRINTABLE OFFICIAL REPORT CONTAINER (Shown during window.print()) */}
+      <div className="hidden print:block printable-report p-6 bg-white text-black">
+        {/* Print Header */}
+        <div className="border-b-2 border-slate-900 pb-4 mb-4 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">
+              TrackSphere Fleet &amp; Location Journey Report
+            </h1>
+            <p className="text-xs text-slate-600 mt-1">
+              Comprehensive Day Journey &amp; Location History Schedule Log
+            </p>
+          </div>
+          <div className="text-right text-xs text-slate-600">
+            <p className="font-bold text-slate-900">TrackSphere Platform</p>
+            <p>Generated: {new Date().toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* User / Device & Schedule Meta */}
+        <div className="grid grid-cols-2 gap-4 p-4 bg-slate-100 rounded-lg text-xs mb-4">
+          <div>
+            <p><strong className="text-slate-800">User / Driver:</strong> {selectedDevice?.user_name || 'Authorized User'}</p>
+            <p><strong className="text-slate-800">Device Name:</strong> {selectedDevice?.name || 'Mobile GPS Tracker'}</p>
+            <p><strong className="text-slate-800">Device ID:</strong> <span className="font-mono">{selectedDeviceId}</span></p>
+          </div>
+          <div>
+            <p><strong className="text-slate-800">Schedule Window:</strong> {new Date(fromTime).toLocaleString()} &mdash; {new Date(toTime).toLocaleString()}</p>
+            <p><strong className="text-slate-800">Total Checkpoints / Stops:</strong> {displayedLocations.length}</p>
+            <p><strong className="text-slate-800">Est. Distance Traveled:</strong> {totalDistanceKm.toFixed(2)} km</p>
+          </div>
+        </div>
+
+        {/* Printable Table */}
+        <table className="printable-table">
+          <thead>
+            <tr>
+              <th style={{ width: '8%' }}>Stop #</th>
+              <th style={{ width: '18%' }}>Time &amp; Date</th>
+              <th style={{ width: '44%' }}>Place Name / Address (জায়গার নাম)</th>
+              <th style={{ width: '18%' }}>GPS Coordinates</th>
+              <th style={{ width: '12%' }}>Accuracy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedLocations.map((p, idx) => {
+              const isStart = idx === 0;
+              const isEnd = idx === displayedLocations.length - 1;
+              const recordedDate = new Date(p.recorded_at);
+              const timeStr = recordedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const dateStr = recordedDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+              const place = getPlaceName(Number(p.latitude), Number(p.longitude));
+
+              return (
+                <tr key={p.id || idx}>
+                  <td style={{ fontWeight: 'bold' }}>
+                    {isStart ? '🚩 START' : isEnd ? '🏁 END' : `#${idx + 1}`}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 'bold' }}>{timeStr}</div>
+                    <div style={{ fontSize: '8pt', color: '#64748b' }}>{dateStr}</div>
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 'bold', fontSize: '9pt', color: '#0f172a' }}>
+                      📍 {place}
+                    </div>
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '8pt' }}>
+                    {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
+                  </td>
+                  <td style={{ fontSize: '8pt' }}>
+                    ±{p.accuracy ? Math.round(Number(p.accuracy)) + 'm' : 'GPS'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Verification Signatures at Bottom */}
+        <div className="mt-8 pt-8 border-t border-slate-300 grid grid-cols-2 gap-8 text-xs text-slate-700">
+          <div>
+            <p className="border-b border-slate-400 w-48 mb-1 pb-4"></p>
+            <p className="font-semibold">Supervisor / Officer Signature</p>
+          </div>
+          <div className="text-right">
+            <p className="border-b border-slate-400 w-48 ml-auto mb-1 pb-4"></p>
+            <p className="font-semibold">TrackSphere System Verification</p>
           </div>
         </div>
       </div>
