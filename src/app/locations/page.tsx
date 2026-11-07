@@ -60,7 +60,7 @@ function sampleHalfHourCheckpoints(records: LocationRecord[]): LocationRecord[] 
 export default function LocationHistoryPage() {
   const [devices, setDevices] = useState<any[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
-  const [filterMode, setFilterMode] = useState<'30min' | 'all'>('30min');
+  const [filterMode, setFilterMode] = useState<'all' | '30min'>('all');
   const [preset, setPreset] = useState<'today' | 'yesterday' | '24h' | 'custom'>('today');
 
   const [fromTime, setFromTime] = useState('');
@@ -139,10 +139,15 @@ export default function LocationHistoryPage() {
       .then(d => {
         if (d.success && Array.isArray(d.data)) {
           setDevices(d.data);
+          let target = '';
           if (urlDevId && d.data.some((x: any) => x.id === urlDevId)) {
-            setSelectedDeviceId(urlDevId);
+            target = urlDevId;
           } else if (d.data.length > 0) {
-            setSelectedDeviceId(d.data[0].id);
+            target = d.data[0].id;
+          }
+          if (target) {
+            setSelectedDeviceId(target);
+            fetchHistory(target);
           }
         }
       })
@@ -181,27 +186,42 @@ export default function LocationHistoryPage() {
 
   // Trigger search when device changes
   useEffect(() => {
-    if (selectedDeviceId && fromTime && toTime) {
-      fetchHistory();
+    if (selectedDeviceId) {
+      fetchHistory(selectedDeviceId);
     }
   }, [selectedDeviceId]);
 
   // Fetch History from API
-  async function fetchHistory() {
-    if (!selectedDeviceId) return;
+  async function fetchHistory(overrideDeviceId?: string | unknown, overrideFrom?: string, overrideTo?: string) {
+    const devId = (typeof overrideDeviceId === 'string' && overrideDeviceId) ? overrideDeviceId : selectedDeviceId;
+    if (!devId) return;
     setLoadingHistory(true);
     setIsPlaying(false);
     if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
 
     try {
       const params = new URLSearchParams({
-        deviceId: selectedDeviceId,
+        deviceId: devId,
         limit: '1500',
         offset: '0',
       });
 
-      if (fromTime) params.set('from', new Date(fromTime).toISOString());
-      if (toTime) params.set('to', new Date(toTime).toISOString());
+      const activeFrom = overrideFrom || fromTime;
+      const activeTo = overrideTo || toTime;
+
+      if (activeFrom) {
+        try { params.set('from', new Date(activeFrom).toISOString()); } catch {}
+      } else {
+        const d = new Date();
+        params.set('from', new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).toISOString());
+      }
+
+      if (activeTo) {
+        try { params.set('to', new Date(activeTo).toISOString()); } catch {}
+      } else {
+        const d = new Date();
+        params.set('to', new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString());
+      }
 
       const res = await fetch(`/api/v1/locations/history?${params.toString()}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -705,7 +725,7 @@ export default function LocationHistoryPage() {
                 />
               </div>
               <button
-                onClick={fetchHistory}
+                onClick={() => fetchHistory()}
                 disabled={loadingHistory || !selectedDeviceId}
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
               >
