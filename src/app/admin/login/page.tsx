@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Lock, Mail, ArrowRight, MapPin } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: 'admin@tracksphere.com', password: '' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
 
       const data = await res.json();
       if (!data.success) {
-        setError(data.error || 'Access Denied: Invalid credentials');
+        setError(data.error || 'Access Denied: Invalid email or password');
         return;
       }
 
@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
       localStorage.setItem('adminUser', JSON.stringify(data.data.user));
       router.push('/dashboard');
     } catch {
-      setError('Cannot connect to TrackSphere Backend server on port 5000');
+      setError('Cannot connect to authentication server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -44,16 +44,14 @@ export default function AdminLoginPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col justify-center items-center px-4">
-      <div className="w-full max-w-md bg-gray-900 border border-red-900/50 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-red-600" />
-
+      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 bg-red-600/20 text-red-500 rounded-xl flex items-center justify-center">
-            <ShieldAlert className="w-6 h-6" />
+          <div className="w-12 h-12 bg-indigo-600/20 text-indigo-400 rounded-2xl flex items-center justify-center shadow-inner">
+            <MapPin className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Admin Portal</h1>
-            <p className="text-xs text-red-400">Password-Protected System Access</p>
+            <h1 className="text-xl font-bold text-white">TrackSphere Sign In</h1>
+            <p className="text-xs text-gray-400">Secure Account Authentication</p>
           </div>
         </div>
 
@@ -66,48 +64,44 @@ export default function AdminLoginPage() {
         <form onSubmit={handleAdminLogin} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-              Admin Email
+              Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-gray-500 absolute left-3 top-3.5" />
+              <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
               <input
                 type="email"
                 required
+                placeholder="name@example.com"
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-              Admin Password
+              Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-gray-500 absolute left-3 top-3.5" />
+              <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
               <input
                 type="password"
                 required
                 placeholder="••••••••••••"
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-          </div>
-
-          <div className="p-3 bg-gray-800/60 rounded-xl border border-gray-700 text-xs text-gray-400">
-            Default credentials: <br />
-            <span className="text-gray-200">admin@tracksphere.com</span> / <span className="text-gray-200">AdminPassword123!</span>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
           >
-            {loading ? 'Authenticating...' : 'Authorize Access'}
+            {loading ? 'Authenticating...' : 'Sign In'}
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

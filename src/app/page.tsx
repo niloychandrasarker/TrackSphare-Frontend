@@ -25,7 +25,7 @@ export default function LandingPage() {
             <a href="#security" className="hover:text-white transition-colors">Security & Privacy</a>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/app"
               className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold rounded-xl transition-all"
@@ -36,10 +36,9 @@ export default function LandingPage() {
 
             <Link
               href="/admin/login"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-200 text-xs font-semibold rounded-xl transition-all hover:border-gray-600 shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-indigo-600/20"
             >
-              <Lock className="w-3.5 h-3.5 text-red-400" />
-              Admin Portal
+              Sign In
             </Link>
           </div>
         </div>
@@ -195,37 +194,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Admin Access Section */}
-      <section id="security" className="py-20 px-6 max-w-7xl mx-auto border-t border-gray-800/80">
-        <div className="bg-gray-900 border border-red-950/60 rounded-3xl p-8 sm:p-12 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-red-600" />
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-red-950/80 border border-red-800 text-red-400 text-xs font-mono mb-3">
-              <Lock className="w-3.5 h-3.5" />
-              RESTRICTED AREA
-            </div>
-            <h3 className="text-2xl font-bold text-white">Platform Administrator Portal</h3>
-            <p className="text-sm text-gray-400 max-w-xl mt-2 leading-relaxed">
-              The live tracking dashboard, user account management, and security audit logs are strictly reserved for authorized administrators with password protection.
-            </p>
-          </div>
-
-          <Link
-            href="/admin/login"
-            className="inline-flex items-center gap-2 px-8 py-3.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 transition-all shrink-0"
-          >
-            Admin Sign In
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-gray-800/60 text-center text-xs text-gray-500">
         <p>© 2026 TrackSphere. All rights reserved. Consent-First Real-Time Location Platform.</p>
         <div className="mt-2 flex items-center justify-center gap-6 text-gray-400">
-          <Link href="/admin/login" className="hover:text-red-400 transition-colors">Admin Portal</Link>
-          <a href="/downloads/TrackSphere-release.apk" download className="hover:text-indigo-400 transition-colors">Direct APK</a>
+          <Link href="/tracking" className="hover:text-white transition-colors">Live Tracking</Link>
+          <Link href="/app" className="hover:text-white transition-colors">Mobile App</Link>
+          <a href="/downloads/TrackSphere-release.apk" download className="hover:text-indigo-400 transition-colors">Download APK</a>
         </div>
       </footer>
     </div>
