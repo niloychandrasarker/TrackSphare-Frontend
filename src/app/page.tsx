@@ -22,23 +22,24 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
-            <a href="#security" className="hover:text-white transition-colors">Security & Privacy</a>
+            <Link href="/tracking" className="hover:text-white transition-colors">Live Map</Link>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
               href="/app"
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold rounded-xl transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold rounded-xl transition-all"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              Mobile Tracker
+              Mobile App
             </Link>
 
             <Link
-              href="/admin/login"
+              href="/tracking"
               className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-indigo-600/20"
             >
-              Sign In
+              <Radio className="w-3.5 h-3.5" />
+              Live Tracking
             </Link>
           </div>
         </div>
